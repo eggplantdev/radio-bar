@@ -2,12 +2,14 @@
 
 Scope: every tracked file from the root commit 444753e through e86d8d2, plus the uncommitted
 „Szukaj na YouTube” change (README.md, context/foundation/manual-checks.md, src/debughook.swift, src/main.swift).
-Checks: /code-review, comment-noise-audit (flag-only), module-cohesion-audit.
+Checks: /code-review, comment-noise-audit (flag-only), mod ule-cohesion-audit.
 Dropped: 10x-impl-review (no plan.md), tailwind-v4-audit (no CSS), feature-first-structure and
 structure-scatter-audit (two source files, nothing to scatter), verify pass (native app, no browser).
 
 ## Findings
+
 <!-- No automated test harness in this repo: every correctness finding's guard is a manual check in context/foundation/manual-checks.md. -->
+
 - [x] 🔴 CRITICAL · fixed · code-review · `src/main.swift` startStream/retry · a stream that fails while loading (no network after wake/login, bad custom URL) sets item.status = .failed, posts none of the observed notifications, and is never retried — KVO on the item's status now retries it
       test: no automated test (no harness) · manual — „review-gate fixes” § Wi-Fi off, pick a station, Wi-Fi on
 - [x] fixed · design · stream lifecycle · 🔵 delayed reconnect not tied to the failed item + 🔵 ICY metadata from the replaced item applied to the new station — one `retry(item)` path: retries only while the item is still current, backs off 3 s → 60 s, resets on readyToPlay; metadata ignored unless its output belongs to the current item
@@ -20,7 +22,8 @@ structure-scatter-audit (two source files, nothing to scatter), verify pass (nat
 - [x] 🟡 WARNING · fixed · code-review · `src/main.swift` permissionDenied · after an Automation denial every Spotify command opened its own alert behind the front app — one alert per run, app activated first, Spotify unticked
       test: no automated test (no harness) · manual — `tccutil reset AppleEvents pl.local.radio`, pick Spotify, deny, scroll
 - [x] 🟡 WARNING · skipped · code-review · `src/main.swift` playSpotify · pick Spotify while it isn't running, then a station within a second → both silent — the fix is a timing window/generation counter, a second mechanism for a change-of-mind within the seconds Spotify takes to launch
-- [ ] 🔵 OBSERVATION · awaiting answer · code-review · `src/main.swift` applicationDidFinishLaunching · Spotify already playing when Radio launches on a station → both play at once; fix needs a choice: pause Spotify, or adopt it as the source
+- [x] 🔵 OBSERVATION · fixed · code-review · `src/main.swift` applicationDidFinishLaunching · Spotify already playing when Radio launched on a station → both played; owner chose adopt: a running Spotify that is playing (asked only with the Automation permission already granted) becomes the source
+      test: no automated test (no harness) · manual — „Spotify playing at launch” §
 - [x] 🔵 OBSERVATION · fixed · code-review · `src/main.swift` scrollWheel · slow trackpad scroll never changed the volume — `scrollRemainder` accumulates until a whole percent
       test: no automated test (no harness) · manual — „review-gate fixes” § slow two-finger scroll
 - [x] 🔵 OBSERVATION · fixed · code-review · `src/main.swift` dockTiles · „Zachowaj w Docku” wrote [Radio] over the whole Dock when persistent-apps couldn't be read — nil → beep, Dock untouched
@@ -34,8 +37,8 @@ structure-scatter-audit (two source files, nothing to scatter), verify pass (nat
 - [x] fixed · comment-noise · `src/main.swift`, `tools/audiolevel.swift`, `tools/make-icon.swift` · 8 comments narrating the code or repeating README — deleted
 - [x] fixed · comment-noise · `src/main.swift`, `tools/make-icon.swift` · 5 comments restating the code — trimmed to the first clause
 - [x] fixed · comment-noise · `src/main.swift` menuWillOpen · the volume-row reset got its one-line why
-- [ ] awaiting answer · module-cohesion · `src/main.swift` · ~850 lines, 5 reasons to change; proposed split: Stations / Spotify / Settings / Menus / main via `extension AppDelegate`; members lose `private`; build.sh → `src/*.swift` with debughook wrapped in `#if DEBUGHOOK`
-- [ ] awaiting answer · simplify (altitude) · `src/main.swift` · `current` + `spotifyActive` → one `enum Source` — removes the two-flag states the Spotify fixes keep guarding; touches most of the file, so your call
+- [x] fixed · module-cohesion · `src/main.swift` · ~850 lines, 5 reasons to change — split into Stations / Spotify / Settings / Menus / main via `extension AppDelegate`; 22 members used across files lost `private`; build.sh compiles `src/*.swift`, debughook wrapped in `#if DEBUGHOOK`
+- [x] fixed · simplify (altitude) · `src/main.swift` · `current` + `spotifyActive` → one stored `source: Source?`; the old names stay as read-only views of it
 - [x] fixed · simplify · `src/main.swift` refreshIndicators · every scroll/slider event rebuilt all row titles — rebuilt only when shows/songs/album/track change (`rowsKey`)
 - [x] fixed · simplify · `src/main.swift` syncSpotifyVolume · one AppleScript per scroll event — one in flight plus a pending flag
 - [x] fixed · simplify · `src/main.swift` logos/spotifyImage · logos and the Spotify icon re-rendered each refresh — lazy, built once
@@ -70,11 +73,14 @@ structure-scatter-audit (two source files, nothing to scatter), verify pass (nat
 - [x] dismissed · fix-review · Spotify quit while Radio is muted keeps volume 0 — restoring it means launching Spotify; accepted
 
 ## Simplify pass
+
 Ran /simplify (4 agents: reuse, simplification, efficiency, altitude) — 13 applied, 1 proposed, 13 dropped/dismissed/skipped; each finding folded into ## Findings (tagged simplify).
 
 ## Fix review
+
 One fresh agent on the fix diff: every fix removes its cause, no regressions in the check marks, Dock menu, hotkeys, menu-bar title, takeover or volume coalescing. Its leftovers are folded into ## Findings (tagged fix-review); a second pass over those six lines was not needed — each is a one-line change verified in the debug build.
 
 ## Tests & suite
+
 No test suite in this repo; verification is the debug build + context/foundation/manual-checks.md.
 Debug build compiles (only the pre-existing `stringValue` deprecation warning); failed-load retry and Polish encoding verified in the debug build.

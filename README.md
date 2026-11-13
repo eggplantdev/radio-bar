@@ -12,7 +12,8 @@ a station switcher, a volume slider, mute and global hotkeys. No window; Zakońc
 ./build.sh --debug    # build/Radio-debug.app, this Mac's arch only, bundle id pl.local.radio.debug, debug hook compiled in
 ```
 
-Ad-hoc signed, no Xcode project — `swiftc` + a hand-built bundle. Needs the Command Line Tools
+Ad-hoc signed, no Xcode project — `swiftc` over `src/*.swift` + a hand-built bundle (`debughook.swift` compiles
+to nothing outside `--debug`). Needs the Command Line Tools
 (`xcode-select --install`). The x86_64 slice links with a harmless `libswiftCompatibilityPacks`
 warning; it has never been run on an Intel Mac.
 
@@ -39,7 +40,8 @@ It drives the Spotify app over AppleScript: choosing it stops the radio and play
 station pauses Spotify, and the slider, mute and hotkeys act on whichever is playing (mute = Spotify
 volume 0, since Spotify has no mute). Playback started in Spotify itself takes over from the radio —
 Spotify broadcasts `com.spotify.client.PlaybackStateChanged`, which also carries the track shown in the
-menu. „Otwórz Spotify” brings Spotify forward while it's the source.
+menu. So does a Spotify already playing when Radio starts — checked only when Spotify runs and Radio
+already has the Automation permission, so a launch never starts Spotify or prompts. „Otwórz Spotify” brings Spotify forward while it's the source.
 Radio never launches Spotify except to play it: pause and volume go through `if … is running`. Quitting
 Spotify leaves nothing playing; switching away from a muted Spotify, or quitting Radio on it, restores
 Spotify's own volume (and on quit pauses it, so it doesn't turn loud by itself).
@@ -101,7 +103,7 @@ Songs are polled every 15 s, shows every 5 min; the playing station's song comes
 
 ## Adding a station
 
-Append to `stations` in `src/main.swift`: name, logo resource name (180×180 PNG in `resources/`),
+Append to `stations` in `src/Stations.swift`: name, logo resource name (180×180 PNG in `resources/`),
 site URL („Otwórz stronę stacji”), stream URL, and song / show URLs + parsers.
 
 ## Traps (all hit while building it)

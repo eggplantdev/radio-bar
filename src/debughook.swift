@@ -1,3 +1,4 @@
+#if DEBUGHOOK
 import Cocoa
 
 extension AppDelegate {
@@ -73,3 +74,4 @@ extension AppDelegate {
         }
     }
 }
+#endif

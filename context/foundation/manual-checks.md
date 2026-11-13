@@ -76,3 +76,11 @@ you verify them in the running app. A section with unticked boxes is not verifie
       with a message about https://; the old value is kept.
 - [ ] In the same dialog ⌘X cuts and ⌘Z undoes.
 - [ ] A Nowy Świat song shown under its row matches what the station is playing, not an hours-old entry.
+
+## 2026-11-13 — Spotify playing at launch, split into files
+
+- [ ] Spotify plays, Radio was last on a station: quit Radio, open it again — Spotify keeps playing, Radio shows
+      Spotify ticked with its track, no station starts.
+- [ ] Spotify paused: open Radio — the last station plays.
+- [ ] Every earlier check in this file still passes (code moved into several files, behaviour unchanged):
+      station switch, Spotify takeover, mute, Ustawienia, Dock menu.

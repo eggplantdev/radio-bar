@@ -8,13 +8,12 @@ mode=release
 if [[ $mode == debug ]]; then
   app=build/Radio-debug.app
   flags=(-D DEBUGHOOK)
-  sources=(src/main.swift src/debughook.swift)
 else
   app=build/Radio.app
   flags=()
-  sources=(src/main.swift)
 fi
 
+sources=(src/*.swift)
 rm -rf "$app" build/arch
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" build/arch
 if [[ $mode == debug ]]; then

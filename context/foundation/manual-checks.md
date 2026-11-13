@@ -54,3 +54,25 @@ you verify them in the running app. A section with unticked boxes is not verifie
       playing it restarts from that URL; clearing the field returns to the public stream.
 - [ ] „Otwórz stronę stacji" opens the playing station's site in the browser; on Spotify the item reads
       „Otwórz Spotify" and brings Spotify forward.
+
+## 2026-11-13 — search the song on YouTube
+
+- [ ] Fresh install: no „Szukaj na YouTube" in the menu; Ustawienia → „Pokazuj „Szukaj na YouTube”" adds it
+      under „Otwórz w Spotify", unticking removes it.
+- [ ] A station plays a song: menu → „Szukaj na YouTube" opens YouTube's search for that artist and title
+      in the browser; the radio keeps playing.
+- [ ] Between songs: „Szukaj na YouTube" is greyed out.
+- [ ] Spotify is the source: „Szukaj na YouTube" searches for Spotify's current track.
+
+## 2026-11-13 — review-gate fixes
+
+- [ ] Wi-Fi off, pick a station, wait ~10 s, Wi-Fi on: the station starts playing on its own within a minute.
+- [ ] Spotify is the source; quit Spotify: Spotify loses its tick; then scroll on the menu-bar icon or press ⌃⌥M —
+      Spotify does not launch.
+- [ ] Spotify is the source; mute, then pick Radio 357; open Spotify and press play: it is audible.
+- [ ] Spotify is the source and muted; quit Radio: Spotify pauses, and pressing play in Spotify is audible.
+- [ ] Slow two-finger scroll on the menu-bar icon: the volume moves by single percents.
+- [ ] Ustawienia → „Radio 357: własny adres strumienia…" → type `radio357.pl/abc` → Zapisz: the dialog stays
+      with a message about https://; the old value is kept.
+- [ ] In the same dialog ⌘X cuts and ⌘Z undoes.
+- [ ] A Nowy Świat song shown under its row matches what the station is playing, not an hours-old entry.

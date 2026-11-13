@@ -9,7 +9,7 @@ NSGradient(starting: NSColor(red: 0.93, green: 0.45, blue: 0.20, alpha: 1), endi
 let config = NSImage.SymbolConfiguration(pointSize: 470, weight: .medium).applying(.init(paletteColors: [.white]))
 let symbol = NSImage(systemSymbolName: "radio", accessibilityDescription: nil)!.withSymbolConfiguration(config)!
 let s = symbol.size
-// The symbol's frame carries uneven padding around the glyph, so centre what it actually paints.
+// The symbol's frame carries uneven padding around the glyph.
 let glyph = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(s.width), pixelsHigh: Int(s.height), bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
 NSGraphicsContext.saveGraphicsState()
 NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: glyph)
@@ -21,7 +21,6 @@ for y in 0..<glyph.pixelsHigh { for x in 0..<glyph.pixelsWide where glyph.colorA
 } }
 let inkMidX = CGFloat(minX + maxX + 1) / 2
 let inkMidY = s.height - CGFloat(minY + maxY + 1) / 2
-// The antenna lifts the ink box above the radio's body, which is what the eye centres; this splits the difference.
 let opticalLift: CGFloat = 36
 symbol.draw(in: NSRect(x: size / 2 - inkMidX, y: size / 2 - inkMidY + opticalLift, width: s.width, height: s.height))
 print("glyph ink \(minX)...\(maxX) x \(minY)...\(maxY) of \(s)")

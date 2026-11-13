@@ -10,7 +10,8 @@ struct Station {
     let stream: URL
     let songURL: URL
     let song: (Data) -> String?
-    let showURL: URL
+    // nil: the show comes from the song's own response.
+    let showURL: URL?
     let show: (Data) -> String?
 }
 
@@ -45,7 +46,7 @@ let stations = [
             guard let song = nonEmpty([json(data)?["s"]]).first, !song.hasPrefix("Radio 357") else { return nil }
             return song.replacingOccurrences(of: " - ", with: " – ")
         },
-        showURL: URL(string: "https://stream.radio357.pl/now/playing.json")!,
+        showURL: nil,
         show: { data in
             let show = json(data)?["p"] as? [String: Any]
             let parts = nonEmpty([show?["n"], show?["a"]])
@@ -66,7 +67,6 @@ let stations = [
             guard parts.count == 2, parts[0] != "Radio Nowy Świat" else { return nil }
             return parts.joined(separator: " – ")
         },
-        // No API names the current show; the homepage's „Teraz na antenie" slide does.
         showURL: URL(string: "https://nowyswiat.online/")!,
         show: { data in
             guard let html = String(data: data, encoding: .utf8),
@@ -83,14 +83,20 @@ let stations = [
 private let spotifyTag = -1
 private let spotifyURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.spotify.client")
 
-private let hotKeys: [(id: UInt32, key: Int, action: String)] = [
-    (1, kVK_ANSI_M, "mute"),
-    (2, kVK_UpArrow, "up"),
-    (3, kVK_DownArrow, "down"),
-    (4, kVK_ANSI_L, "find"),
+private let hotKeys: [(id: UInt32, key: Int, action: Selector)] = [
+    (1, kVK_ANSI_M, #selector(AppDelegate.toggleMute)),
+    (2, kVK_UpArrow, #selector(AppDelegate.volumeUp)),
+    (3, kVK_DownArrow, #selector(AppDelegate.volumeDown)),
+    (4, kVK_ANSI_L, #selector(AppDelegate.findInSpotify)),
 ]
 
-// Spotify's volume bar: a thin rounded track, filled up to the value, with no knob.
+private let iconSide: CGFloat = 18
+private let volumeRowWidth: CGFloat = 300
+private let session = URLSession(configuration: .ephemeral)
+
+// Built from an ASCII set: on macOS 13 URL(string:) returns nil for an unescaped „ą”.
+private let queryCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
 final class ThinSliderCell: NSSliderCell {
     override func drawBar(inside rect: NSRect, flipped: Bool) {
         let bar = NSRect(x: rect.minX, y: rect.midY - 2, width: rect.width, height: 4)
@@ -112,12 +118,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     var slider: NSSlider!
     var volumeRow: NSView!
     var openSourceItem: NSMenuItem!
+    var youTubeItem: NSMenuItem!
     var buttonImageKey: String?
     var muteButton: NSButton!
     var levelLabel: NSTextField!
     var stationMenuItems: [NSMenuItem] = []
     var appStationMenuItems: [NSMenuItem] = []
-    var hotKeyRefs: [EventHotKeyRef] = []
+    var rowsKey: String?
+    var retryDelay: TimeInterval = 3
+    var statusObservation: NSKeyValueObservation?
+    var scrollRemainder = 0.0
+    var spotifyVolumeInFlight = false
+    var spotifyVolumePending = false
+    var permissionAlertShown = false
+    lazy var logos = stations.map(logo)
+    lazy var spotifyImage = spotifyURL.map { url -> NSImage in
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        icon.size = NSSize(width: iconSide, height: iconSide)
+        return icon
+    }
     var current: Int?
     var spotifyActive = false
     var spotifyTrack: String?
@@ -125,11 +144,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     var spotifyTrackID: String?
     var stationSongs = [String?](repeating: nil, count: stations.count)
     var stationShows = [String?](repeating: nil, count: stations.count)
-    var nowPlayingTicks = 0
     var spotifyMenuItems: [NSMenuItem] = []
     let spotifyQueue = DispatchQueue(label: "spotify")
     var muted = false
-    var volume = UserDefaults.standard.object(forKey: "volume") as? Double ?? 1.0
+    var volume = UserDefaults.standard.double(forKey: "volume")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         player.volume = Float(volume)
@@ -149,21 +167,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         installScrollVolume()
         installHotKeys()
         observeSpotify()
-        // A song lasts minutes and a show an hour or more; the Nowy Świat show comes from its 160 KB homepage.
-        let timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            self.nowPlayingTicks += 1
-            self.fetchNowPlaying(shows: self.nowPlayingTicks % 20 == 0)
+        var ticks = 0
+        let timer = Timer(timeInterval: 15, repeats: true) { [weak self] _ in
+            ticks += 1
+            self?.fetchNowPlaying(shows: ticks % 20 == 0)
         }
         timer.tolerance = 3
+        // In the default mode only, the timer would stop while the menu is open.
+        RunLoop.main.add(timer, forMode: .common)
         fetchNowPlaying(shows: true)
 
-        let last = UserDefaults.standard.object(forKey: "station") as? Int ?? 0
+        let last = UserDefaults.standard.integer(forKey: "station")
         if last == spotifyTag, spotifyURL != nil {
             playSpotify()
         } else {
             play(station: stations.indices.contains(last) ? last : 0)
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        guard spotifyActive, muted || spotifyVolumeInFlight else { return }
+        let source = Self.ifRunning("pause\nset sound volume to \(percent)")
+        spotifyQueue.sync { _ = NSAppleScript(source: source)?.executeAndReturnError(nil) }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -173,19 +198,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         let menu = NSMenu()
-        for (index, station) in stations.enumerated() {
-            let entry = item(station.name, #selector(stationChosen(_:)), "")
-            entry.tag = index
-            entry.state = index == current ? .on : .off
-            menu.addItem(entry)
-        }
-        if spotifyURL != nil {
-            let entry = item("Spotify", #selector(playSpotify), "")
-            entry.state = spotifyActive ? .on : .off
+        for entry in sourceItems(numbered: false) {
+            entry.state = isPlaying(entry) ? .on : .off
             menu.addItem(entry)
         }
         menu.addItem(.separator())
-        menu.addItem(item(muted ? "Włącz dźwięk" : "Wycisz", #selector(toggleMute), ""))
+        menu.addItem(item(muted ? "Włącz dźwięk" : "Wycisz", #selector(toggleMute)))
         return menu
     }
 
@@ -204,20 +222,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     private func startStream() {
         guard let current else { return }
         let item = AVPlayerItem(url: streamURL(current))
-        let output = AVPlayerItemMetadataOutput(identifiers: nil)
+        let output = AVPlayerItemMetadataOutput(identifiers: [AVMetadataIdentifier.icyMetadataStreamTitle.rawValue])
         output.setDelegate(self, queue: .main)
         item.add(output)
+        // A stream that can't load (no network yet after wake or login, a bad custom URL) fails without any notification.
+        statusObservation = item.observe(\.status) { [weak self] item, _ in
+            DispatchQueue.main.async {
+                if item.status == .readyToPlay { self?.retryDelay = 3 }
+                if item.status == .failed { self?.retry(item) }
+            }
+        }
         streamSong = nil
         player.replaceCurrentItem(with: item)
         player.play()
     }
 
-    // The stream's own ICY title is live, where the Nowy Świat API can lag by hours; it reads "Artist - Title",
-    // "AD" during the Radio 357 start message, and the station's name between songs.
+    private func retry(_ item: AVPlayerItem) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + retryDelay) { [weak self] in
+            guard let self, item === self.player.currentItem else { return }
+            self.startStream()
+            self.retryDelay = min(self.retryDelay * 2, 60)
+        }
+    }
+
     func metadataOutput(_ output: AVPlayerItemMetadataOutput, didOutputTimedMetadataGroups groups: [AVTimedMetadataGroup], from track: AVPlayerItemTrack?) {
-        guard current != nil, let title = groups.flatMap(\.items).first(where: { $0.identifier?.rawValue == "icy/StreamTitle" })?.stringValue else { return }
+        guard let current, player.currentItem?.outputs.contains(output) == true,
+              let title = groups.flatMap(\.items).first?.stringValue else { return }
         let plain = { (text: String) in text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil) }
-        let filler = title == "AD" || ["Radio 357", "Nowy Swiat"].contains { plain(title).contains(plain($0)) }
+        let filler = title == "AD" || plain(title).contains(plain(stations[current].name))
         let song = filler ? nil : nonEmpty([title.replacingOccurrences(of: " - ", with: " – ")]).first
         guard song != streamSong else { return }
         streamSong = song
@@ -229,8 +261,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         let center = NotificationCenter.default
         for name in [AVPlayerItem.failedToPlayToEndTimeNotification, AVPlayerItem.playbackStalledNotification, AVPlayerItem.didPlayToEndTimeNotification] {
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
-                guard let self, note.object as? AVPlayerItem === self.player.currentItem else { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.startStream() }
+                guard let self, let item = note.object as? AVPlayerItem, item === self.player.currentItem else { return }
+                self.retry(item)
             }
         }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -242,17 +274,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         play(station: sender.tag)
     }
 
-    @objc func turnOff() {
-        stopRadio()
-        stopSpotify()
-        refreshIndicators()
-    }
-
-    @objc func playSpotify() {
+    private func adoptSpotify() {
         stopRadio()
         spotifyActive = true
         UserDefaults.standard.set(spotifyTag, forKey: "station")
+    }
+
+    @objc func playSpotify() {
+        adoptSpotify()
         spotify("set sound volume to \(spotifyVolume)\nplay\nreturn album of current track & linefeed & artist of current track & \" – \" & name of current track & linefeed & id of current track") { [weak self] result in
+            guard let result else {
+                self?.spotifyActive = false
+                self?.refreshIndicators()
+                return
+            }
             let lines = result.components(separatedBy: "\n") + ["", ""]
             self?.spotifyAlbum = nonEmpty([lines[0]]).first
             self?.spotifyTrack = nonEmpty([lines[1]]).first
@@ -272,29 +307,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     private func stopSpotify() {
         guard spotifyActive else { return }
         spotifyActive = false
-        spotify("pause")
+        // Mute is Spotify's volume 0, which would otherwise outlive Radio switching away from it.
+        spotifyIfRunning("pause\nset sound volume to \(percent)")
     }
 
     private func fetchNowPlaying(shows: Bool) {
         for (index, station) in stations.enumerated() {
-            if station.showURL == station.songURL {
-                load(station.songURL) { [weak self] data in
-                    self?.stationSongs[index] = station.song(data)
-                    self?.stationShows[index] = station.show(data)
-                }
-                continue
+            load(station.songURL) { [weak self] data in
+                self?.stationSongs[index] = station.song(data)
+                if station.showURL == nil { self?.stationShows[index] = station.show(data) }
             }
-            load(station.songURL) { [weak self] data in self?.stationSongs[index] = station.song(data) }
-            if shows {
-                load(station.showURL) { [weak self] data in self?.stationShows[index] = station.show(data) }
+            if shows, let showURL = station.showURL {
+                load(showURL) { [weak self] data in self?.stationShows[index] = station.show(data) }
             }
         }
     }
 
     private func load(_ url: URL, then apply: @escaping (Data) -> Void) {
-        var request = URLRequest(url: url)
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-        URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
+        // The Nowy Świat API sits behind a CDN that serves the same song for hours unless the URL is new.
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        components.queryItems = (components.queryItems ?? []) + [URLQueryItem(name: "t", value: String(Int(Date().timeIntervalSince1970)))]
+        session.dataTask(with: components.url!) { [weak self] data, _, _ in
             guard let data else { return }
             DispatchQueue.main.async {
                 apply(data)
@@ -303,9 +336,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         }.resume()
     }
 
-    private var spotifyVolume: Int { muted ? 0 : Int((volume * 100).rounded()) }
+    private var percent: Int { Int((volume * 100).rounded()) }
+    private var spotifyVolume: Int { muted ? 0 : percent }
 
-    // Spotify broadcasts every play/pause/track change, so playback started in Spotify itself takes over from the radio.
     private func observeSpotify() {
         #if DEBUGHOOK
         // Lets a measurement run play a station without reacting to, and muting, the Spotify someone is listening to.
@@ -319,31 +352,66 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
                 self.spotifyTrackID = nonEmpty([info["Track ID"]]).first
             }
             if info["Player State"] as? String == "Playing", !self.spotifyActive {
-                self.stopRadio()
-                self.spotifyActive = true
-                UserDefaults.standard.set(spotifyTag, forKey: "station")
-                self.spotify("set sound volume to \(self.spotifyVolume)")
+                self.adoptSpotify()
+                self.syncSpotifyVolume()
             }
+            self.refreshIndicators()
+        }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] note in
+            guard let self, (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier == "com.spotify.client" else { return }
+            self.spotifyActive = false
+            (self.spotifyTrack, self.spotifyAlbum, self.spotifyTrackID) = (nil, nil, nil)
             self.refreshIndicators()
         }
     }
 
-    private func spotify(_ commands: String, then: ((String) -> Void)? = nil) {
-        let source = "tell application id \"com.spotify.client\"\n\(commands)\nend tell"
+    // A plain `tell` launches Spotify, which a pause or a volume change must not do.
+    private func spotifyIfRunning(_ commands: String, then: (() -> Void)? = nil) {
+        spotify(Self.ifRunning(commands), tell: false) { _ in then?() }
+    }
+
+    private static func ifRunning(_ commands: String) -> String {
+        "if application id \"com.spotify.client\" is running then\ntell application id \"com.spotify.client\"\n\(commands)\nend tell\nend if"
+    }
+
+    private func spotify(_ commands: String, tell: Bool = true, then: ((String?) -> Void)? = nil) {
+        let source = tell ? "tell application id \"com.spotify.client\"\n\(commands)\nend tell" : commands
         spotifyQueue.async {
             var error: NSDictionary?
             let result = NSAppleScript(source: source)?.executeAndReturnError(&error)
-            if let then, let text = result?.stringValue { DispatchQueue.main.async { then(text) } }
-            guard let code = error?[NSAppleScript.errorNumber] as? Int, code == -1743 else { return }
+            let denied = error?[NSAppleScript.errorNumber] as? Int == -1743
             DispatchQueue.main.async {
-                let alert = NSAlert()
-                alert.messageText = "Radio nie ma zgody na sterowanie Spotify"
-                alert.informativeText = "Włącz Spotify przy Radio w Ustawieniach systemowych → Prywatność i ochrona → Automatyzacja."
-                alert.addButton(withTitle: "Otwórz Ustawienia")
-                alert.addButton(withTitle: "Anuluj")
-                if alert.runModal() == .alertFirstButtonReturn {
-                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!)
-                }
+                then?(result?.stringValue)
+                if denied { self.permissionDenied() }
+            }
+        }
+    }
+
+    private func permissionDenied() {
+        guard !permissionAlertShown else { return }
+        permissionAlertShown = true
+        let alert = NSAlert()
+        alert.messageText = "Radio nie ma zgody na sterowanie Spotify"
+        alert.informativeText = "Włącz Spotify przy Radio w Ustawieniach systemowych → Prywatność i ochrona → Automatyzacja."
+        alert.addButton(withTitle: "Otwórz Ustawienia")
+        alert.addButton(withTitle: "Anuluj")
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!)
+        }
+    }
+
+    // A scroll sends dozens of changes a second; each script takes tens of ms, so only the latest one is sent.
+    private func syncSpotifyVolume() {
+        guard spotifyActive else { return }
+        guard !spotifyVolumeInFlight else { return spotifyVolumePending = true }
+        spotifyVolumeInFlight = true
+        spotifyIfRunning("set sound volume to \(spotifyVolume)") { [weak self] in
+            guard let self else { return }
+            self.spotifyVolumeInFlight = false
+            if self.spotifyVolumePending {
+                self.spotifyVolumePending = false
+                self.syncSpotifyVolume()
             }
         }
     }
@@ -351,22 +419,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     @objc func toggleMute() {
         muted.toggle()
         player.isMuted = muted
-        if spotifyActive { spotify("set sound volume to \(spotifyVolume)") }
+        syncSpotifyVolume()
         refreshIndicators()
     }
 
-    // The Web API that could like a track directly is capped at five allowlisted accounts, so this opens the
-    // track (or a search for the radio's song) in Spotify, where its ⊕ button saves it.
+    private var searchText: String? {
+        (spotifyActive ? spotifyTrack : current.flatMap { songs[$0] })?
+            .replacingOccurrences(of: " – ", with: " ").addingPercentEncoding(withAllowedCharacters: queryCharacters)
+    }
+
     private var spotifyTarget: URL? {
         if spotifyActive { return spotifyTrackID.flatMap(URL.init(string:)) }
-        guard let current, let song = songs[current],
-              let query = song.replacingOccurrences(of: " – ", with: " ").addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
-        return URL(string: "spotify:search:\(query)")
+        return searchText.flatMap { URL(string: "spotify:search:\($0)") }
     }
 
     @objc func findInSpotify() {
         guard spotifyURL != nil, let spotifyTarget else { return NSSound.beep() }
         NSWorkspace.shared.open(spotifyTarget)
+    }
+
+    var youTubeTarget: URL? {
+        searchText.flatMap { URL(string: "https://www.youtube.com/results?search_query=\($0)") }
+    }
+
+    @objc func findOnYouTube() {
+        guard let youTubeTarget else { return NSSound.beep() }
+        NSWorkspace.shared.open(youTubeTarget)
     }
 
     @objc func volumeUp() { setVolume(volume + 0.1) }
@@ -386,30 +464,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 380, height: 24))
         field.stringValue = UserDefaults.standard.string(forKey: key) ?? ""
         field.placeholderString = stations[sender.tag].stream.absoluteString
-        let alert = NSAlert()
-        alert.messageText = "\(stations[sender.tag].name): własny adres strumienia"
-        alert.informativeText = "Np. osobisty link patrona. Puste pole przywraca publiczny strumień."
-        alert.accessoryView = field
-        alert.addButton(withTitle: "Zapisz")
-        alert.addButton(withTitle: "Anuluj")
-        alert.window.initialFirstResponder = field
-        NSApp.activate(ignoringOtherApps: true)
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        let text = field.stringValue.trimmingCharacters(in: .whitespaces)
-        UserDefaults.standard.set(URL(string: text)?.scheme == nil ? nil : text, forKey: key)
-        if current == sender.tag { startStream() }
+        let hint = "Np. osobisty link patrona. Puste pole przywraca publiczny strumień."
+        var info = hint
+        while true {
+            let alert = NSAlert()
+            alert.messageText = "\(stations[sender.tag].name): własny adres strumienia"
+            alert.informativeText = info
+            alert.accessoryView = field
+            alert.addButton(withTitle: "Zapisz")
+            alert.addButton(withTitle: "Anuluj")
+            alert.window.initialFirstResponder = field
+            NSApp.activate(ignoringOtherApps: true)
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            let text = field.stringValue.trimmingCharacters(in: .whitespaces)
+            let url = URL(string: text)
+            guard text.isEmpty || (["http", "https"].contains(url?.scheme?.lowercased()) && url?.host != nil) else {
+                info = "To nie jest adres strumienia — musi zaczynać się od https:// albo http://.\n\(hint)"
+                continue
+            }
+            UserDefaults.standard.set(text.isEmpty ? nil : text, forKey: key)
+            if current == sender.tag { startStream() }
+            return
+        }
     }
 
     private func setVolume(_ value: Double) {
-        volume = (min(max(value, 0), 1) * 100).rounded() / 100
+        let rounded = (min(max(value, 0), 1) * 100).rounded() / 100
+        guard rounded != volume || muted else { return }
+        volume = rounded
         UserDefaults.standard.set(volume, forKey: "volume")
         player.volume = Float(volume)
-        if muted {
-            toggleMute()
-        } else {
-            if spotifyActive { spotify("set sound volume to \(spotifyVolume)") }
-            refreshIndicators()
-        }
+        muted = false
+        player.isMuted = false
+        syncSpotifyVolume()
+        refreshIndicators()
     }
 
     private var songs: [String?] {
@@ -417,24 +505,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     }
 
     func refreshIndicators() {
-        let level = muted ? "wyciszone" : "\(Int((volume * 100).rounded()))%"
-        let station = current.map { stations[$0] }
-        let sourceName = spotifyActive ? "Spotify" : station?.name
-        NSApp.dockTile.badgeLabel = muted ? "🔇" : nil
+        let level = muted ? "wyciszone" : "\(percent)%"
+        let sourceName = spotifyActive ? "Spotify" : current.map { stations[$0].name }
+        let badge = muted ? "🔇" : nil
+        if NSApp.dockTile.badgeLabel != badge { NSApp.dockTile.badgeLabel = badge }
 
-        let details = spotifyActive ? [spotifyAlbum, spotifyTrack] : current.map { [stationShows[$0], songs[$0]] } ?? []
-        // Every assignment redraws the menu-bar item, even with an equal value, so only changes are written.
+        let details = (spotifyActive ? [spotifyAlbum, spotifyTrack] : current.map { [stationShows[$0], songs[$0]] } ?? []).compactMap { $0 }
+        // Every assignment redraws the menu-bar item, even with an equal value.
         let imageKey = "\(sourceName ?? "-") \(muted)"
         if imageKey != buttonImageKey {
             buttonImageKey = imageKey
-            let icon = spotifyActive ? spotifyIcon(side: 18) : station.flatMap { logo($0, side: 18) }
+            let icon = spotifyActive ? spotifyImage : current.flatMap { logos[$0] }
             statusItem.button?.image = sourceName == nil ? NSImage(systemSymbolName: "radio", accessibilityDescription: "Radio") : muted ? icon.map(crossedOut) : icon
         }
         // An item too wide for the space left of the notch disappears from the menu bar altogether.
-        let playing = showsNowPlaying ? (details.last ?? nil ?? details.first ?? nil).map { $0.count > 40 ? $0.prefix(39) + "…" : $0 } : nil
+        let playing = showsNowPlaying ? details.last.map { $0.count > 40 ? $0.prefix(39) + "…" : $0 } : nil
         let title = sourceName == nil ? "" : [muted ? nil : level, playing].compactMap { $0 }.joined(separator: " · ")
         if statusItem.button?.title != title { statusItem.button?.title = title }
-        let nowPlaying = sourceName.map { ([$0] + details.compactMap { $0 }).joined(separator: "\n") }
+        let nowPlaying = sourceName.map { ([$0] + details).joined(separator: "\n") }
         let toolTip = "\(nowPlaying ?? "Radio wyłączone")\n⌃⌥M wycisz · ⌃⌥↑ / ⌃⌥↓ głośność · ⌃⌥L otwórz w Spotify"
         if statusItem.button?.toolTip != toolTip { statusItem.button?.toolTip = toolTip }
 
@@ -444,31 +532,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
             .withSymbolConfiguration(.init(pointSize: 15, weight: .regular))
         levelLabel?.stringValue = muted ? "—" : level
         openSourceItem?.title = spotifyActive ? "Otwórz Spotify" : "Otwórz stronę stacji"
-        for (index, entry) in (stationMenuItems + appStationMenuItems).enumerated() {
-            entry.state = index % stations.count == current ? .on : .off
+        for entry in stationMenuItems + appStationMenuItems + spotifyMenuItems {
+            entry.state = isPlaying(entry) ? .on : .off
         }
+
+        // Volume changes arrive dozens of times a second and change nothing in the rows.
+        let rows = "\(stationShows) \(songs) \(spotifyAlbum ?? "") \(spotifyTrack ?? "")"
+        guard rows != rowsKey else { return }
+        rowsKey = rows
         for (index, entry) in stationMenuItems.enumerated() {
-            entry.attributedTitle = menuTitle(logo(stations[index], side: 18), stations[index].name, show: stationShows[index], song: songs[index])
-            entry.onStateImage = checkmark(for: entry.attributedTitle)
+            decorate(entry, logos[index], stations[index].name, show: stationShows[index], song: songs[index])
         }
-        for entry in spotifyMenuItems {
-            entry.state = spotifyActive ? .on : .off
-            if entry.menu === statusItem.menu {
-                entry.attributedTitle = menuTitle(spotifyIcon(side: 18), "Spotify", show: spotifyAlbum, song: spotifyTrack)
-                entry.onStateImage = checkmark(for: entry.attributedTitle)
-            }
+        if let entry = spotifyMenuItems.first(where: { $0.menu === statusItem.menu }) {
+            decorate(entry, spotifyImage, "Spotify", show: spotifyAlbum, song: spotifyTrack)
         }
+    }
+
+    private func decorate(_ entry: NSMenuItem, _ image: NSImage?, _ name: String, show: String?, song: String?) {
+        let title = menuTitle(image, name, show: show, song: song)
+        entry.attributedTitle = title
+        entry.onStateImage = checkmark(for: title)
+    }
+
+    private func isPlaying(_ entry: NSMenuItem) -> Bool {
+        entry.action == #selector(playSpotify) ? spotifyActive : entry.tag == current
     }
 
     @objc func toggleMenuBarIcon() {
         statusItem.isVisible.toggle()
     }
 
-    private var showsNowPlaying: Bool { UserDefaults.standard.object(forKey: "showsNowPlaying") as? Bool ?? true }
+    private var showsNowPlaying: Bool { UserDefaults.standard.bool(forKey: "showsNowPlaying") }
 
     @objc func toggleNowPlaying() {
         UserDefaults.standard.set(!showsNowPlaying, forKey: "showsNowPlaying")
         refreshIndicators()
+    }
+
+    private var showsYouTubeSearch: Bool { UserDefaults.standard.bool(forKey: "showsYouTubeSearch") }
+
+    @objc func toggleYouTubeSearch() {
+        UserDefaults.standard.set(!showsYouTubeSearch, forKey: "showsYouTubeSearch")
+        youTubeItem.isHidden = !showsYouTubeSearch
     }
 
     @objc func toggleDockIcon() {
@@ -478,7 +583,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     }
 
     @objc func toggleKeepInDock() {
-        var tiles = dockTiles()
+        guard var tiles = dockTiles() else { return NSSound.beep() }
         if let index = tiles.firstIndex(where: isOwnTile) {
             tiles.remove(at: index)
         } else {
@@ -495,7 +600,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         CFPreferencesSetAppValue("persistent-apps" as CFString, tiles as NSArray, "com.apple.dock" as CFString)
         CFPreferencesAppSynchronize("com.apple.dock" as CFString)
         // The Dock reads persistent-apps only when it starts.
-        Process.launchedProcess(launchPath: "/usr/bin/killall", arguments: ["Dock"])
+        _ = try? Process.run(URL(fileURLWithPath: "/usr/bin/killall"), arguments: ["Dock"])
     }
 
     @objc func toggleLaunchAtLogin() {
@@ -521,23 +626,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
             return showsDockIcon
         case #selector(toggleNowPlaying):
             menuItem.state = showsNowPlaying ? .on : .off
+        case #selector(toggleYouTubeSearch):
+            menuItem.state = showsYouTubeSearch ? .on : .off
         case #selector(toggleDockIcon):
             menuItem.state = showsDockIcon ? .on : .off
             return statusItem.isVisible
         case #selector(toggleKeepInDock):
-            menuItem.state = dockTiles().contains(where: isOwnTile) ? .on : .off
+            menuItem.state = dockTiles()?.contains(where: isOwnTile) == true ? .on : .off
         case #selector(toggleLaunchAtLogin):
             menuItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
         case #selector(findInSpotify):
             return spotifyTarget != nil
+        case #selector(findOnYouTube):
+            return youTubeTarget != nil
         default:
             break
         }
         return true
     }
 
-    private func dockTiles() -> [[String: Any]] {
-        CFPreferencesCopyAppValue("persistent-apps" as CFString, "com.apple.dock" as CFString) as? [[String: Any]] ?? []
+    // nil when unreadable: writing a list built from nothing would wipe the user's Dock.
+    private func dockTiles() -> [[String: Any]]? {
+        CFPreferencesCopyAppValue("persistent-apps" as CFString, "com.apple.dock" as CFString) as? [[String: Any]]
     }
 
     private func isOwnTile(_ tile: [String: Any]) -> Bool {
@@ -559,14 +669,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
 
     private func settingsItem() -> NSMenuItem {
         let menu = NSMenu(title: "Ustawienia")
-        menu.addItem(item("Pokazuj w pasku menu", #selector(toggleMenuBarIcon), ""))
-        menu.addItem(item("Pokazuj, co leci, w pasku menu", #selector(toggleNowPlaying), ""))
-        menu.addItem(item("Pokazuj w Docku", #selector(toggleDockIcon), ""))
-        menu.addItem(item("Zachowaj w Docku", #selector(toggleKeepInDock), ""))
-        menu.addItem(item("Uruchamiaj przy logowaniu", #selector(toggleLaunchAtLogin), ""))
+        menu.addItem(item("Pokazuj w pasku menu", #selector(toggleMenuBarIcon)))
+        menu.addItem(item("Pokazuj, co leci, w pasku menu", #selector(toggleNowPlaying)))
+        menu.addItem(item("Pokazuj „Szukaj na YouTube”", #selector(toggleYouTubeSearch)))
+        menu.addItem(item("Pokazuj w Docku", #selector(toggleDockIcon)))
+        menu.addItem(item("Zachowaj w Docku", #selector(toggleKeepInDock)))
+        menu.addItem(item("Uruchamiaj przy logowaniu", #selector(toggleLaunchAtLogin)))
         menu.addItem(.separator())
         for (index, station) in stations.enumerated() {
-            let entry = item("\(station.name): własny adres strumienia…", #selector(editStreamURL(_:)), "")
+            let entry = item("\(station.name): własny adres strumienia…", #selector(editStreamURL(_:)))
             entry.tag = index
             menu.addItem(entry)
         }
@@ -579,8 +690,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
             guard let self, let button = self.statusItem.button, event.window === button.window else { return event }
             let raw = event.isDirectionInvertedFromDevice ? -event.scrollingDeltaY : event.scrollingDeltaY
-            let step = event.hasPreciseScrollingDeltas ? raw * 0.004 : raw * 0.05
-            if step != 0 { self.setVolume(self.volume + step) }
+            // A slow trackpad step is below the 1% the volume is rounded to, so steps add up until they reach it.
+            self.scrollRemainder += event.hasPreciseScrollingDeltas ? raw * 0.004 : raw * 0.05
+            guard abs(self.scrollRemainder) >= 0.01 else { return nil }
+            self.setVolume(self.volume + self.scrollRemainder)
+            self.scrollRemainder = 0
             return nil
         }
     }
@@ -590,55 +704,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         InstallEventHandler(GetApplicationEventTarget(), { _, event, _ in
             var id = EventHotKeyID()
             GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil, MemoryLayout<EventHotKeyID>.size, nil, &id)
-            let delegate = NSApp.delegate as? AppDelegate
-            switch hotKeys.first(where: { $0.id == id.id })?.action {
-            case "mute": delegate?.toggleMute()
-            case "up": delegate?.volumeUp()
-            case "down": delegate?.volumeDown()
-            case "find": delegate?.findInSpotify()
-            default: break
-            }
+            if let action = hotKeys.first(where: { $0.id == id.id })?.action { NSApp.sendAction(action, to: NSApp.delegate, from: nil) }
             return noErr
         }, 1, &spec, nil, nil)
 
         for hotKey in hotKeys {
             var ref: EventHotKeyRef?
-            let status = RegisterEventHotKey(UInt32(hotKey.key), UInt32(controlKey | optionKey), EventHotKeyID(signature: OSType(0x5244_494F), id: hotKey.id), GetApplicationEventTarget(), 0, &ref)
-            if status == noErr, let ref { hotKeyRefs.append(ref) }
+            RegisterEventHotKey(UInt32(hotKey.key), UInt32(controlKey | optionKey), EventHotKeyID(signature: OSType(0x5244_494F), id: hotKey.id), GetApplicationEventTarget(), 0, &ref)
         }
     }
 
-    // A menu never resizes an item's view, so the volume row is stretched to whatever the titles make the menu.
+    // A menu never resizes an item's view.
     func menuWillOpen(_ menu: NSMenu) {
-        volumeRow.setFrameSize(NSSize(width: 300, height: volumeRow.frame.height))
-        volumeRow.setFrameSize(NSSize(width: max(menu.size.width, 300), height: volumeRow.frame.height))
+        // The row's own width counts towards menu.size, so without the reset the menu never shrinks back.
+        volumeRow.setFrameSize(NSSize(width: volumeRowWidth, height: volumeRow.frame.height))
+        volumeRow.setFrameSize(NSSize(width: max(menu.size.width, volumeRowWidth), height: volumeRow.frame.height))
     }
 
     private func makeStatusMenu() -> NSMenu {
         let menu = NSMenu()
 
-        for (index, station) in stations.enumerated() {
-            let entry = item(station.name, #selector(stationChosen(_:)), "")
-            entry.tag = index
-            entry.attributedTitle = menuTitle(logo(station, side: 18), station.name)
-            stationMenuItems.append(entry)
-            menu.addItem(entry)
-        }
-        if spotifyURL != nil {
-            let entry = item("Spotify", #selector(playSpotify), "")
-            entry.attributedTitle = menuTitle(spotifyIcon(side: 18), "Spotify")
-            spotifyMenuItems.append(entry)
+        for entry in sourceItems(numbered: false) {
+            if entry.action == #selector(playSpotify) { spotifyMenuItems.append(entry) } else { stationMenuItems.append(entry) }
             menu.addItem(entry)
         }
         menu.addItem(.separator())
         if spotifyURL != nil {
-            let find = item("Otwórz w Spotify", #selector(findInSpotify), "l")
-            let symbol = NSImage(systemSymbolName: "arrow.up.forward.app", accessibilityDescription: nil)?
-                .withSymbolConfiguration(.init(paletteColors: [.labelColor]))
-            find.attributedTitle = menuTitle(symbol, "Otwórz w Spotify")
+            let find = symbolItem("Otwórz w Spotify", "arrow.up.forward.app", #selector(findInSpotify), "l")
             find.keyEquivalentModifierMask = [.control, .option]
             menu.addItem(find)
         }
+        youTubeItem = symbolItem("Szukaj na YouTube", "play.rectangle", #selector(findOnYouTube))
+        youTubeItem.isHidden = !showsYouTubeSearch
+        menu.addItem(youTubeItem)
 
         muteButton = NSButton(image: NSImage(), target: self, action: #selector(toggleMute))
         muteButton.isBordered = false
@@ -664,7 +762,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         levelLabel.frame = NSRect(x: 248, y: 11, width: 40, height: 18)
         levelLabel.autoresizingMask = .minXMargin
 
-        let row = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 40))
+        let row = NSView(frame: NSRect(x: 0, y: 0, width: volumeRowWidth, height: 40))
         volumeRow = row
         [muteButton, slider, levelLabel].forEach { row.addSubview($0!) }
         let rowItem = NSMenuItem()
@@ -672,21 +770,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         menu.addItem(rowItem)
 
         menu.addItem(.separator())
-        openSourceItem = item("Otwórz stronę stacji", #selector(openSource), "")
+        openSourceItem = item("Otwórz stronę stacji", #selector(openSource))
         menu.addItem(openSourceItem)
         menu.addItem(settingsItem())
         menu.addItem(withTitle: "Zakończ", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
         return menu
     }
 
-    // macOS 26 menus drop NSMenuItem.image here, so the logo rides in the title as a text attachment.
+    // macOS 26 menus drop NSMenuItem.image here.
     private func menuTitle(_ image: NSImage?, _ name: String, show: String? = nil, song: String? = nil) -> NSAttributedString {
         let font = NSFont.menuFont(ofSize: 0)
         let title = NSMutableAttributedString()
         if let image {
             let attachment = NSTextAttachment()
             attachment.image = image
-            attachment.bounds = NSRect(x: 0, y: -4, width: 18, height: 18)
+            attachment.bounds = NSRect(x: 0, y: -4, width: iconSide, height: iconSide)
             title.append(NSAttributedString(attachment: attachment))
             title.append(NSAttributedString(string: "  ", attributes: [.font: font]))
         }
@@ -694,12 +792,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         let lines = [show ?? name, song.map { "♪ \($0)" }].compactMap { $0 }.flatMap { wrapped($0, font) }
         title.append(NSAttributedString(string: lines.joined(separator: "\u{2028}"), attributes: [.font: font]))
         let style = NSMutableParagraphStyle()
-        style.headIndent = image == nil ? 0 : 18 + ("  " as NSString).size(withAttributes: [.font: font]).width
+        style.headIndent = image == nil ? 0 : iconSide + ("  " as NSString).size(withAttributes: [.font: font]).width
         title.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: title.length))
         return title
     }
 
-    // A menu is as wide as its widest title and never wraps one, so long lines are broken here.
+    // A menu is as wide as its widest title and never wraps one.
     private func wrapped(_ text: String, _ font: NSFont, maxWidth: CGFloat = 340) -> [String] {
         var lines: [String] = []
         for word in text.split(separator: " ").map(String.init) {
@@ -713,8 +811,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     }
 
     // The menu centres the state image on the row, which on a multi-line row puts the check between the lines.
-    private func checkmark(for title: NSAttributedString?) -> NSImage? {
-        guard let title, let check = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)?
+    private func checkmark(for title: NSAttributedString) -> NSImage? {
+        guard let check = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)?
             .withSymbolConfiguration(.init(pointSize: NSFont.systemFontSize, weight: .semibold)) else { return nil }
         let height = ceil(title.boundingRect(with: NSSize(width: 2000, height: 400), options: .usesLineFragmentOrigin).height)
         let lineHeight = NSLayoutManager().defaultLineHeight(for: NSFont.menuFont(ofSize: 0))
@@ -744,26 +842,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         }
     }
 
-    private func spotifyIcon(side: CGFloat) -> NSImage? {
-        guard let spotifyURL else { return nil }
-        let icon = NSWorkspace.shared.icon(forFile: spotifyURL.path)
-        icon.size = NSSize(width: side, height: side)
-        return icon
-    }
-
-    private func logo(_ station: Station, side: CGFloat) -> NSImage? {
+    private func logo(_ station: Station) -> NSImage? {
         guard let source = NSImage(named: station.logo) else { return nil }
-        return NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
-            NSBezierPath(roundedRect: rect, xRadius: side * 0.22, yRadius: side * 0.22).addClip()
+        return NSImage(size: NSSize(width: iconSide, height: iconSide), flipped: false) { rect in
+            NSBezierPath(roundedRect: rect, xRadius: iconSide * 0.22, yRadius: iconSide * 0.22).addClip()
             source.draw(in: rect)
             return true
         }
     }
 
-    private func item(_ title: String, _ action: Selector, _ key: String) -> NSMenuItem {
+    private func item(_ title: String, _ action: Selector, _ key: String = "") -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
         item.target = self
         return item
+    }
+
+    private func symbolItem(_ title: String, _ symbol: String, _ action: Selector, _ key: String = "") -> NSMenuItem {
+        let entry = item(title, action, key)
+        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(paletteColors: [.labelColor]))
+        entry.attributedTitle = menuTitle(image, title)
+        return entry
+    }
+
+    private func sourceItems(numbered: Bool) -> [NSMenuItem] {
+        var entries = stations.enumerated().map { index, station in
+            let entry = item(station.name, #selector(stationChosen(_:)), numbered ? "\(index + 1)" : "")
+            entry.tag = index
+            return entry
+        }
+        if spotifyURL != nil { entries.append(item("Spotify", #selector(playSpotify), numbered ? "\(stations.count + 1)" : "")) }
+        return entries
     }
 
     private func makeMenu() -> NSMenu {
@@ -781,6 +890,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
 
         let editItem = NSMenuItem()
         let editMenu = NSMenu(title: "Edycja")
+        editMenu.addItem(withTitle: "Cofnij", action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: "Ponów", action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "Wytnij", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
         editMenu.addItem(withTitle: "Kopiuj", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         editMenu.addItem(withTitle: "Wklej", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         editMenu.addItem(withTitle: "Zaznacz wszystko", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
@@ -789,15 +902,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
 
         let stationItem = NSMenuItem(title: "Stacja", action: nil, keyEquivalent: "")
         let stationMenu = NSMenu(title: "Stacja")
-        for (index, station) in stations.enumerated() {
-            let entry = item(station.name, #selector(stationChosen(_:)), "\(index + 1)")
-            entry.tag = index
-            appStationMenuItems.append(entry)
-            stationMenu.addItem(entry)
-        }
-        if spotifyURL != nil {
-            let entry = item("Spotify", #selector(playSpotify), "\(stations.count + 1)")
-            spotifyMenuItems.append(entry)
+        for entry in sourceItems(numbered: true) {
+            if entry.action == #selector(playSpotify) { spotifyMenuItems.append(entry) } else { appStationMenuItems.append(entry) }
             stationMenu.addItem(entry)
         }
         stationItem.submenu = stationMenu
@@ -815,8 +921,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     }
 }
 
+UserDefaults.standard.register(defaults: ["volume": 1.0, "showsNowPlaying": true, "showsDockIcon": true])
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
-app.setActivationPolicy(UserDefaults.standard.object(forKey: "showsDockIcon") as? Bool == false ? .accessory : .regular)
+app.setActivationPolicy(UserDefaults.standard.bool(forKey: "showsDockIcon") ? .regular : .accessory)
 app.run()

@@ -1,4 +1,3 @@
-// usage: audiolevel <bundle-id> <seconds>  → prints peak RMS of that app's audio output
 import Foundation
 import ScreenCaptureKit
 import CoreMedia

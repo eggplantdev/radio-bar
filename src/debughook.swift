@@ -14,10 +14,8 @@ extension AppDelegate {
             case "mute": self.toggleMute(); log("mute -> \(self.muted)")
             case "up": self.volumeUp()
             case "down": self.volumeDown()
-            case "off": self.turnOff(); log("off")
             case "state":
-                log("state station=\(self.current.map { stations[$0].name } ?? "off") muted=\(self.muted) volume=\(self.volume) title=\(self.statusItem.button?.title ?? "-") rate=\(self.player.rate) item=\(self.player.currentItem.map { "\($0.status.rawValue)" } ?? "-") streamSong=\(self.streamSong ?? "-") checks=\(self.stationMenuItems.map { $0.state == .on }) logos=\(self.stationMenuItems.map { $0.attributedTitle?.containsAttachments ?? false }) songs=\(self.stationSongs.map { $0 ?? "-" }) shows=\(self.stationShows.map { $0 ?? "-" }) items=\(self.stationMenuItems.map { $0.attributedTitle?.string ?? "" }) spotifyID=\(self.spotifyTrackID ?? "-") spotify=\(self.spotifyMenuItems.map { "\($0.state == .on):\($0.attributedTitle?.string ?? $0.title)" })")
-            case "rmenu": DispatchQueue.main.async { self.statusItem.button?.performClick(nil) }
+                log("state station=\(self.current.map { stations[$0].name } ?? "off") muted=\(self.muted) volume=\(self.volume) title=\(self.statusItem.button?.title ?? "-") rate=\(self.player.rate) item=\(self.player.currentItem.map { "\($0.status.rawValue)" } ?? "-") streamSong=\(self.streamSong ?? "-") checks=\(self.stationMenuItems.map { $0.state == .on }) logos=\(self.stationMenuItems.map { $0.attributedTitle?.containsAttachments ?? false }) songs=\(self.stationSongs.map { $0 ?? "-" }) shows=\(self.stationShows.map { $0 ?? "-" }) items=\(self.stationMenuItems.map { $0.attributedTitle?.string ?? "" }) spotifyID=\(self.spotifyTrackID ?? "-") youtube=\(self.youTubeTarget?.absoluteString ?? "-") youtubeHidden=\(self.youTubeItem.isHidden) spotify=\(self.spotifyMenuItems.map { "\($0.state == .on):\($0.attributedTitle?.string ?? $0.title)" })")
             case "popup": DispatchQueue.main.async { _ = self.statusItem.menu?.popUp(positioning: nil, at: NSPoint(x: 400, y: 700), in: nil) }
             case "closemenu": self.statusItem.menu?.cancelTracking()
             case let c where c.hasPrefix("snap "):
@@ -26,7 +24,7 @@ extension AppDelegate {
                 try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: String(c.dropFirst(5))))
                 log("snap -> \(b.bounds.size)")
             case let c where c.hasPrefix("snaprows "):
-                let titles = (self.stationMenuItems + self.spotifyMenuItems.filter { $0.attributedTitle != nil }).compactMap(\.attributedTitle)
+                let titles = (self.stationMenuItems + self.spotifyMenuItems).compactMap(\.attributedTitle)
                 let sizes = titles.map { $0.boundingRect(with: NSSize(width: 2000, height: 400), options: .usesLineFragmentOrigin).size }
                 let size = NSSize(width: (sizes.map(\.width).max() ?? 0) + 20, height: sizes.map { $0.height + 12 }.reduce(0, +))
                 let image = NSImage(size: size, flipped: true) { rect in

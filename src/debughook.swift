@@ -1,5 +1,4 @@
 import Cocoa
-import WebKit
 
 extension AppDelegate {
     func installDebugHook() {
@@ -17,7 +16,7 @@ extension AppDelegate {
             case "down": self.volumeDown()
             case "off": self.turnOff(); log("off")
             case "state":
-                log("state station=\(self.current.map { stations[$0].name } ?? "off") muted=\(self.muted) volume=\(self.volume) title=\(self.statusItem.button?.title ?? "-") window=\(self.window.title) checks=\(self.stationMenuItems.map { $0.state == .on }) logos=\(self.stationMenuItems.map { $0.attributedTitle?.containsAttachments ?? false }) track=\(self.stationTrack ?? "-") items=\(self.stationMenuItems.map { $0.attributedTitle?.string ?? "" }) spotify=\(self.spotifyMenuItems.map { "\($0.state == .on):\($0.attributedTitle?.string ?? $0.title)" })")
+                log("state station=\(self.current.map { stations[$0].name } ?? "off") muted=\(self.muted) volume=\(self.volume) title=\(self.statusItem.button?.title ?? "-") rate=\(self.player.rate) item=\(self.player.currentItem.map { "\($0.status.rawValue)" } ?? "-") streamSong=\(self.streamSong ?? "-") checks=\(self.stationMenuItems.map { $0.state == .on }) logos=\(self.stationMenuItems.map { $0.attributedTitle?.containsAttachments ?? false }) songs=\(self.stationSongs.map { $0 ?? "-" }) shows=\(self.stationShows.map { $0 ?? "-" }) items=\(self.stationMenuItems.map { $0.attributedTitle?.string ?? "" }) spotifyID=\(self.spotifyTrackID ?? "-") spotify=\(self.spotifyMenuItems.map { "\($0.state == .on):\($0.attributedTitle?.string ?? $0.title)" })")
             case "rmenu": DispatchQueue.main.async { self.statusItem.button?.performClick(nil) }
             case "popup": DispatchQueue.main.async { _ = self.statusItem.menu?.popUp(positioning: nil, at: NSPoint(x: 400, y: 700), in: nil) }
             case "closemenu": self.statusItem.menu?.cancelTracking()
@@ -26,12 +25,37 @@ extension AppDelegate {
                 b.cacheDisplay(in: b.bounds, to: rep)
                 try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: String(c.dropFirst(5))))
                 log("snap -> \(b.bounds.size)")
+            case let c where c.hasPrefix("snaprows "):
+                let titles = (self.stationMenuItems + self.spotifyMenuItems.filter { $0.attributedTitle != nil }).compactMap(\.attributedTitle)
+                let sizes = titles.map { $0.boundingRect(with: NSSize(width: 2000, height: 400), options: .usesLineFragmentOrigin).size }
+                let size = NSSize(width: (sizes.map(\.width).max() ?? 0) + 20, height: sizes.map { $0.height + 12 }.reduce(0, +))
+                let image = NSImage(size: size, flipped: true) { rect in
+                    NSColor.windowBackgroundColor.setFill(); rect.fill()
+                    var y: CGFloat = 6
+                    for (title, s) in zip(titles, sizes) { title.draw(with: NSRect(x: 10, y: y, width: s.width, height: s.height), options: .usesLineFragmentOrigin); y += s.height + 12 }
+                    return true
+                }
+                let rep = NSBitmapImageRep(data: image.tiffRepresentation!)!
+                try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: String(c.dropFirst(9))))
+                log("snaprows \(size)")
+            case let c where c.hasPrefix("snaprow "):
+                let row = self.volumeRow!
+                row.appearance = NSAppearance(named: .darkAqua)
+                row.setFrameSize(NSSize(width: 420, height: row.frame.height))
+                let rep = row.bitmapImageRepForCachingDisplay(in: row.bounds)!
+                row.cacheDisplay(in: row.bounds, to: rep)
+                try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: String(c.dropFirst(8))))
+                log("snaprow")
             case let c where c.hasPrefix("call "):
                 self.perform(NSSelectorFromString(String(c.dropFirst(5)))); log("called \(c.dropFirst(5))")
             case let c where c.hasPrefix("spotify "):
                 var error: NSDictionary?
                 let result = NSAppleScript(source: "tell application id \"com.spotify.client\" to \(c.dropFirst(8))")?.executeAndReturnError(&error)
                 log("spotify \(c.dropFirst(8)) -> \(result?.stringValue ?? "-") \(error.map { "\($0)" } ?? "")")
+            case let c where c.hasPrefix("fakesong "):
+                let rest = c.dropFirst(9)
+                self.stationSongs[Int(String(rest.prefix(1)))!] = String(rest.dropFirst(2))
+                self.refreshIndicators(); log("fakesong")
             case "settings":
                 let states = ["toggleMenuBarIcon", "toggleDockIcon", "toggleKeepInDock", "toggleLaunchAtLogin"].map { name -> String in
                     let probe = NSMenuItem(title: name, action: NSSelectorFromString(name), keyEquivalent: "")
@@ -46,7 +70,7 @@ extension AppDelegate {
                 self.slider.doubleValue = Double(c.dropFirst(7))!
                 self.sliderMoved(self.slider); log("slider -> \(self.volume)")
             default:
-                self.web.evaluateJavaScript(cmd) { r, e in log("js: \(String(describing: r)) err: \(String(describing: e))") }
+                log("unknown \(cmd)")
             }
         }
     }

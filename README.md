@@ -1,7 +1,7 @@
 # Radio
 
-Native macOS wrapper for Radio 357 and Nowy Świat: one WKWebView app with a menu-bar station switcher,
-a volume slider, mute and global hotkeys. Closing the window keeps it playing; only Quit stops it.
+Native macOS menu-bar player for Radio 357 and Nowy Świat: AVPlayer on each station's public stream,
+a station switcher, a volume slider, mute and global hotkeys. No window; Zakończ stops it.
 
 ## Build
 
@@ -28,7 +28,6 @@ The app isn't notarized by Apple, so macOS blocks the first launch once:
 
 1. Unzip, drag `Radio.app` into Applications, open it — macOS says it can't verify the app; click Done.
 2. System Settings → Privacy & Security → scroll down → **Open Anyway**, confirm with your password.
-3. Accept each station's cookie banner once.
 
 Terminal alternative to step 2: `xattr -dr com.apple.quarantine /Applications/Radio.app`.
 Building from source (`git clone` + `./build.sh --install`) skips the block entirely.
@@ -40,50 +39,70 @@ It drives the Spotify app over AppleScript: choosing it stops the radio and play
 station pauses Spotify, and the slider, mute and hotkeys act on whichever is playing (mute = Spotify
 volume 0, since Spotify has no mute). Playback started in Spotify itself takes over from the radio —
 Spotify broadcasts `com.spotify.client.PlaybackStateChanged`, which also carries the track shown in the
-menu. „Pokaż okno” brings Spotify forward while it's the source.
+menu. „Otwórz Spotify” brings Spotify forward while it's the source.
 
 The first command triggers macOS's Automation prompt („Radio chce sterować aplikacją Spotify”); a
 denial shows an alert linking to Privacy & Security → Automation. Spotify's `sound volume` is far
 from linear — 20% on the slider is much quieter on Spotify than on the radio.
 
+„Otwórz w Spotify” (⌃⌥L) opens the current song in Spotify, where its ⊕ saves it to Liked Songs or a
+playlist: the radio's song as a `spotify:search:` query, Spotify's own track by its `Track ID`. Saving it
+directly would need the Web API, whose Development Mode admits only five allowlisted accounts per app.
+
 ## Controls
 
 - Menu bar: station logo + volume %, the same logo dimmed and crossed out when muted, radio symbol when off. Scroll on it to
   change volume.
-- Global hotkeys: ⌃⌥M mute, ⌃⌥↑ / ⌃⌥↓ volume ±10%.
-- In the app: ⌘1 / ⌘2 station, ⌘0 off, ⌘M mute, ⌘↑ / ⌘↓ volume. Dock menu has stations, mute, off.
+- Global hotkeys: ⌃⌥M mute, ⌃⌥↑ / ⌃⌥↓ volume ±10%, ⌃⌥L open the song in Spotify.
+- In the app: ⌘1 / ⌘2 station, ⌘M mute, ⌘↑ / ⌘↓ volume. Dock menu has stations and mute. There is no
+  "off" — Zakończ stops playback; in the status menu the speaker icon mutes.
 - Last station and volume persist in UserDefaults (`station`, `volume`).
-- **Ustawienia** (menu-bar menu and app menu): show in menu bar, show in Dock (off = menu-bar-only
+- **Ustawienia** (menu-bar menu and app menu): show in menu bar, show what's playing in the menu bar (on by
+  default; the song, else the show, cut at 40 characters because an item wider than the space left of the
+  notch vanishes), show in Dock (off = menu-bar-only
   app; the last visible one can't be turned off), keep in Dock (edits `com.apple.dock`
   `persistent-apps` and restarts the Dock), launch at login (`SMAppService`). Keep-in-Dock and
   login refuse to run from an App Translocation copy and ask to move the app to Applications first.
 
+## Streams
+
+Both stations publish these URLs for third-party players, no login: `stream.radio357.pl` and
+`stream.nowyswiat.online/mp3`, MP3 128 kbps — the same quality their websites give a listener who isn't
+a patron. Each redirects to a Revma URL with a ~5 s token, so only the stable URL is ever stored.
+Radio 357 plays every connection a start message with ads (ICY title `AD`). Ustawienia →
+„<stacja>: własny adres strumienia…” swaps in a patron's personal link (Radio 357 without the start
+message, Nowy Świat at 256 kbps); it stays in UserDefaults (`streamURL.<index>`), never in the repo.
+A stalled or failed stream, and every wake from sleep, reconnects after 3 s.
+
+Replacing the old WKWebView of each station's website cut memory from 240–400 MB (growing ~0.5 GB/h)
+to ~25 MB, and dropped the second parallel copy of the stream the website player downloaded.
+
 ## Now playing
 
-The current station's track (or show, between songs) sits next to its name in the status menu and in the
-icon's tooltip, polled every 15 s from the endpoints the sites themselves use:
-`stream.radio357.pl/now/playing.json` (`s` = "Artist - Song", `p.n` = show) and
-`nowyswiat.online/api/oZeta/stat` (`data.title` = artist, `data.artist` = song — swapped; during a show
-`title` is "Radio Nowy Świat", which is dropped). Nowy Świat's own player only fills its title while the
-page is visible, so reading the DOM doesn't work.
+Every row in the status menu is the logo with the show and hosts (album for Spotify; the name when unknown), then „♪ artist – song”, never truncated — lines past 340 pt wrap;
+shown for every source, not just the playing one, which also fills the icon's tooltip.
+Songs are polled every 15 s, shows every 5 min; the playing station's song comes from the stream's ICY
+`StreamTitle` instead (filtered: `AD`, the station's name), which is live where the APIs can lag:
+
+- Radio 357: `stream.radio357.pl/now/playing.json` — `s` = "Artist - Song" (the station's slogan
+  between songs), `p.n` / `p.a` = show / host.
+- Nowy Świat songs: `nowyswiat.online/api/oZeta/stat` — `data.title` = artist, `data.artist` = song
+  (swapped); between songs `title` is "Radio Nowy Świat". It can sit on a stale entry for hours.
+- Nowy Świat show: no API; parsed from the homepage's „Teraz na antenie" slide
+  (`.rns-slide-schedule-now`).
 
 ## Adding a station
 
 Append to `stations` in `src/main.swift`: name, logo resource name (180×180 PNG in `resources/`),
-site URL, a `startScript` that starts that site's player, and a now-playing URL + parser.
+site URL („Otwórz stronę stacji”), stream URL, and song / show URLs + parsers.
 
 ## Traps (all hit while building it)
 
-- **Autostart:** a page-side `setTimeout(() => audio.play())` is refused as not a user gesture;
-  `evaluateJavaScript` from Swift counts as one, so retries are driven from Swift.
-- **`didFinish` never fires on radio357.pl** (it keeps loading resources) — autostart hangs off `didCommit`.
-- **Detached `new Audio()`** (Nowy Świat) isn't in the DOM; the injected script patches
-  `HTMLMediaElement.prototype.play` to track every element for volume control.
-- **Mute** uses WebKit's private `_setPageMuted:` (JS fallback). Fine for direct distribution; the
-  Mac App Store would reject it.
 - **macOS 26 menus ignore `NSMenuItem.image`** — station logos ride in `attributedTitle` as an
   `NSTextAttachment`.
-- First run shows each site's cookie banner (CookieLawInfo / Cookiebot); answer it once, it persists.
+- **A menu never resizes an item's view** — the volume row is stretched in `menuWillOpen`.
+- **`NSMenuItem.onStateImage` is centred on a multi-line row** — the checkmark is a custom image whose
+  height matches the title, so it sits on the first line.
 
 ## Testing tools (`tools/`)
 
@@ -93,15 +112,18 @@ Compile each with `swiftc tools/<name>.swift -o tools/bin/<name>`.
   check that it plays, mutes, and that volume scales.
 - `send <command>` — drives the debug build over a distributed notification (`station.debug`):
   `mute`, `up`, `down`, `off`, `state`, `station N`, `slider N`, `popup`, `closemenu`,
-  `snap <path.png>` (status-item button), anything else is evaluated as JS. Log:
+  `snap <path.png>` (status-item button), `snaprows <path.png>` (the source rows), `snaprow <path.png>`
+  (the volume row), `call <selector>`, `fakesong N text`. Log:
   `~/Library/Logs/radio-debug.log`.
 - `mouse move|click|rclick x y` — CGEvent mouse.
 - `upscale in.png out.png` — 8× onto a dark background, to read a `snap` capture.
 - `make-icon out.png` — regenerates the app icon source (then `iconutil` → `resources/AppIcon.icns`).
 
 The debug and release builds both drive the same Spotify and both react to its broadcasts: a Spotify
-command from one flips the other to Spotify, and muting either sets Spotify's volume to 0. Quit the
-release build before testing anything near Spotify.
+command from one flips the other to Spotify, and muting either sets Spotify's volume to 0. To play a
+station in the debug build next to someone's Spotify, launch it with
+`open --env RADIO_NO_SPOTIFY=1 build/Radio-debug.app` (it then ignores Spotify's broadcasts) and set
+`defaults write pl.local.radio.debug volume -float 0` for a silent run that still streams.
 
 The menu bar auto-hides on this Mac, so screenshot the button with `send snap`, and the menu with
 `send popup` (pops it mid-screen).

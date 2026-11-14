@@ -68,6 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     var spotifyTrack: String?
     var spotifyAlbum: String?
     var spotifyTrackID: String?
+    var spotifyPaused = false
     var stationSongs = [String?](repeating: nil, count: stations.count)
     var stationShows = [String?](repeating: nil, count: stations.count)
     var spotifyMenuItems: [NSMenuItem] = []
@@ -194,6 +195,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     func adoptSpotify() {
         stopRadio()
         source = .spotify
+        spotifyPaused = false
         UserDefaults.standard.set(spotifyTag, forKey: "station")
     }
 

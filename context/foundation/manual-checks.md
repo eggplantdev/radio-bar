@@ -11,7 +11,7 @@ you verify them in the running app. A section with unticked boxes is not verifie
 - [ ] Menu-bar icon → pick the other station: it switches, the checkmark moves, the menu-bar logo changes.
 - [ ] Menu-bar slider at ~20%: audibly quieter; ⌃⌥↑ / ⌃⌥↓ change it from any app; scrolling on the
       icon changes it.
-- [ ] ⌃⌥M from another app: sound stops and the menu-bar logo turns dimmed and crossed out; again
+- [ ] ⌃⌥M from another app: sound stops and the menu bar shows the logo and a crossed-out speaker instead of the %; again
       restores it.
 - [ ] While a song plays, the station's row in the menu shows artist – title; between songs the
       show name (and host on Radio 357), never the station's slogan.
@@ -41,7 +41,7 @@ you verify them in the running app. A section with unticked boxes is not verifie
 - [ ] Fresh install: next to the logo and volume the menu bar shows the playing song, or the show
       between songs; Ustawienia → „Pokazuj, co leci, w pasku menu" is ticked.
 - [ ] Untick it: only the logo and volume remain; tick it again: the song comes back.
-- [ ] Muted with the option on: the crossed-out logo and the song, no volume.
+- [ ] Muted with the option on: the logo, a crossed-out speaker and the song, no volume.
 
 ## 2026-11-13 — native stream player
 
@@ -52,8 +52,8 @@ you verify them in the running app. A section with unticked boxes is not verifie
 - [ ] Sleep the Mac with a station playing, wake it: the station plays again.
 - [ ] Ustawienia → „Nowy Świat: własny adres strumienia…" → paste a stream URL → Zapisz: if Nowy Świat is
       playing it restarts from that URL; clearing the field returns to the public stream.
-- [ ] „Otwórz stronę stacji" opens the playing station's site in the browser; on Spotify the item reads
-      „Otwórz Spotify" and brings Spotify forward.
+- [ ] „Otwórz stronę stacji" opens the playing station's site in the browser; on Spotify the item is gone
+      and only „Otwórz w Spotify" remains.
 
 ## 2026-11-13 — search the song on YouTube
 
@@ -82,5 +82,7 @@ you verify them in the running app. A section with unticked boxes is not verifie
 - [ ] Spotify plays, Radio was last on a station: quit Radio, open it again — Spotify keeps playing, Radio shows
       Spotify ticked with its track, no station starts.
 - [ ] Spotify paused: open Radio — the last station plays.
+- [ ] Spotify is the source; press pause in Spotify: the menu bar shows the Spotify logo and ⏸ instead of the %;
+      play again: the % comes back.
 - [ ] Every earlier check in this file still passes (code moved into several files, behaviour unchanged):
       station switch, Spotify takeover, mute, Ustawienia, Dock menu.

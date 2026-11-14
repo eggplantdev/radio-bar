@@ -10,7 +10,9 @@ extension AppDelegate {
                 self.spotifyAlbum = nonEmpty([info["Album"]]).first
                 self.spotifyTrackID = nonEmpty([info["Track ID"]]).first
             }
-            if info["Player State"] as? String == "Playing", !self.spotifyActive {
+            let playing = info["Player State"] as? String == "Playing"
+            self.spotifyPaused = !playing
+            if playing, !self.spotifyActive {
                 self.adoptSpotify()
                 self.syncSpotifyVolume()
             }

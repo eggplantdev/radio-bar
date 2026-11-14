@@ -34,15 +34,17 @@ extension AppDelegate {
 
         let details = (spotifyActive ? [spotifyAlbum, spotifyTrack] : current.map { [stationShows[$0], songs[$0]] } ?? []).compactMap { $0 }
         // Every assignment redraws the menu-bar item, even with an equal value.
-        let imageKey = "\(sourceName ?? "-") \(muted)"
+        let paused = spotifyActive && spotifyPaused
+        let state = muted ? "speaker.slash.fill" : paused ? "pause.fill" : nil
+        let imageKey = "\(sourceName ?? "-") \(state ?? "")"
         if imageKey != buttonImageKey {
             buttonImageKey = imageKey
             let icon = spotifyActive ? spotifyImage : current.flatMap { logos[$0] }
-            statusItem.button?.image = sourceName == nil ? NSImage(systemSymbolName: "radio", accessibilityDescription: "Radio") : muted ? icon.map(crossedOut) : icon
+            statusItem.button?.image = sourceName == nil ? NSImage(systemSymbolName: "radio", accessibilityDescription: "Radio") : icon.map { icon in state.map { besides(icon, $0) } ?? icon }
         }
         // An item too wide for the space left of the notch disappears from the menu bar altogether.
         let playing = showsNowPlaying ? details.last.map { $0.count > 40 ? $0.prefix(39) + "…" : $0 } : nil
-        let title = sourceName == nil ? "" : [muted ? nil : level, playing].compactMap { $0 }.joined(separator: " · ")
+        let title = sourceName == nil ? "" : [state == nil ? level : nil, playing].compactMap { $0 }.joined(separator: " · ")
         if statusItem.button?.title != title { statusItem.button?.title = title }
         let nowPlaying = sourceName.map { ([$0] + details).joined(separator: "\n") }
         let toolTip = "\(nowPlaying ?? "Radio wyłączone")\n⌃⌥M wycisz · ⌃⌥↑ / ⌃⌥↓ głośność · ⌃⌥L otwórz w Spotify"
@@ -53,7 +55,8 @@ extension AppDelegate {
         muteButton?.image = NSImage(systemSymbolName: speaker, accessibilityDescription: "Wycisz")?
             .withSymbolConfiguration(.init(pointSize: 15, weight: .regular))
         levelLabel?.stringValue = muted ? "—" : level
-        openSourceItem?.title = spotifyActive ? "Otwórz Spotify" : "Otwórz stronę stacji"
+        // „Otwórz w Spotify” already opens Spotify on the playing track.
+        openSourceItem?.isHidden = spotifyActive
         for entry in stationMenuItems + appStationMenuItems + spotifyMenuItems {
             entry.state = isPlaying(entry) ? .on : .off
         }
@@ -190,20 +193,21 @@ extension AppDelegate {
         return image
     }
 
-    private func crossedOut(_ icon: NSImage) -> NSImage {
-        NSImage(size: icon.size, flipped: false) { rect in
-            icon.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.45)
-            let slash = NSBezierPath()
-            slash.move(to: NSPoint(x: rect.minX + 1, y: rect.maxY - 1))
-            slash.line(to: NSPoint(x: rect.maxX - 1, y: rect.minY + 1))
-            slash.lineCapStyle = .round
-            NSGraphicsContext.current?.compositingOperation = .clear
-            slash.lineWidth = 4
-            slash.stroke()
-            NSGraphicsContext.current?.compositingOperation = .sourceOver
-            NSColor.labelColor.setStroke()
-            slash.lineWidth = 1.75
-            slash.stroke()
+    // The logo keeps its colours, so the symbol can't ride as a template image and is tinted when drawn.
+    private func besides(_ icon: NSImage, _ symbol: String) -> NSImage {
+        guard let glyph = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 13, weight: .medium)) else { return icon }
+        let gap: CGFloat = 5
+        return NSImage(size: NSSize(width: icon.size.width + gap + glyph.size.width, height: icon.size.height), flipped: false) { rect in
+            icon.draw(in: NSRect(origin: .zero, size: icon.size))
+            let glyphRect = NSRect(x: icon.size.width + gap, y: (rect.height - glyph.size.height) / 2, width: glyph.size.width, height: glyph.size.height)
+            let tinted = NSImage(size: glyph.size, flipped: false) { bounds in
+                glyph.draw(in: bounds)
+                NSColor.labelColor.set()
+                bounds.fill(using: .sourceAtop)
+                return true
+            }
+            tinted.draw(in: glyphRect)
             return true
         }
     }

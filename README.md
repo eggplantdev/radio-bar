@@ -41,7 +41,7 @@ station pauses Spotify, and the slider, mute and hotkeys act on whichever is pla
 volume 0, since Spotify has no mute). Playback started in Spotify itself takes over from the radio —
 Spotify broadcasts `com.spotify.client.PlaybackStateChanged`, which also carries the track shown in the
 menu. So does a Spotify already playing when Radio starts — checked only when Spotify runs and Radio
-already has the Automation permission, so a launch never starts Spotify or prompts. „Otwórz Spotify” brings Spotify forward while it's the source.
+already has the Automation permission, so a launch never starts Spotify or prompts. While Spotify is the source, „Otwórz stronę stacji” hides — „Otwórz w Spotify” already brings it forward.
 Radio never launches Spotify except to play it: pause and volume go through `if … is running`. Quitting
 Spotify leaves nothing playing; switching away from a muted Spotify, or quitting Radio on it, restores
 Spotify's own volume (and on quit pauses it, so it doesn't turn loud by itself).
@@ -59,7 +59,7 @@ browser. YouTube has no Mac app to drive, so that's as far as it goes.
 
 ## Controls
 
-- Menu bar: station logo + volume %, the same logo dimmed and crossed out when muted, radio symbol when nothing plays (Spotify quit while it was the source). Scroll on it to
+- Menu bar: station logo + volume %; muted: the logo + a crossed-out speaker, Spotify paused: the logo + ⏸ (in place of the %); radio symbol when nothing plays (Spotify quit while it was the source). Scroll on it to
   change volume.
 - Global hotkeys: ⌃⌥M mute, ⌃⌥↑ / ⌃⌥↓ volume ±10%, ⌃⌥L open the song in Spotify.
 - In the app: ⌘1 / ⌘2 station, ⌘M mute, ⌘↑ / ⌘↓ volume. Dock menu has stations and mute. There is no

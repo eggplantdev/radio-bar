@@ -29,6 +29,7 @@ extension AppDelegate {
                 let parts = c.dropFirst(9).split(separator: " ")
                 let target = parts.count > 1 ? menu.items.first { $0.submenu != nil }?.submenu ?? menu : menu
                 self.menuWillOpen(target)
+                defer { self.menuDidClose(target) }
                 let views = target.items.filter { !$0.isHidden }.map { $0.view ?? NSView(frame: NSRect(x: 0, y: 0, width: 10, height: 11)) }
                 let width = views.map(\.frame.width).max() ?? 0
                 let reps = views.map { v -> NSBitmapImageRep in

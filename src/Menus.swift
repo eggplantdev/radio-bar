@@ -21,12 +21,6 @@ extension AppDelegate {
         let details = (spotifyActive ? [spotifyAlbum, spotifyTrack] : current.map { [stationShows[$0], songs[$0]] } ?? []).compactMap { $0 }
         let state = muted ? "speaker.slash.fill" : paused ? "pause.fill" : nil
         let imageKey = "\(sourceName ?? "-") \(state ?? "")"
-        // Every assignment redraws the menu-bar item, even with an equal value.
-        if imageKey != buttonImageKey {
-            buttonImageKey = imageKey
-            let icon = spotifyActive ? spotifyImage : current.flatMap { logos[$0] }
-            statusItem.button?.image = sourceName == nil ? NSImage(systemSymbolName: "radio", accessibilityDescription: "Radio") : icon.map { icon in state.map { besides(icon, $0) } ?? icon }
-        }
         // An item too wide for the space left of the notch disappears from the menu bar altogether.
         let notch = ((statusItem.button?.window?.screen ?? NSScreen.main)?.safeAreaInsets.top ?? 0) > 0
         let limit = notch ? 40 : 100
@@ -34,7 +28,16 @@ extension AppDelegate {
         let parts = [state == nil ? level : nil, playing].compactMap { $0 }
         // A thin space widens the button's own image gap to match the gaps around „·”.
         let title = sourceName == nil || parts.isEmpty ? "" : "\u{2009}" + parts.joined(separator: " · ")
-        if statusItem.button?.title != title { statusItem.button?.title = title }
+        // The menu hangs from the item's left edge, so a wider or narrower item would shift the open menu sideways.
+        if !statusMenuOpen {
+            // Every assignment redraws the menu-bar item, even with an equal value.
+            if imageKey != buttonImageKey {
+                buttonImageKey = imageKey
+                let icon = spotifyActive ? spotifyImage : current.flatMap { logos[$0] }
+                statusItem.button?.image = sourceName == nil ? NSImage(systemSymbolName: "radio", accessibilityDescription: "Radio") : icon.map { icon in state.map { besides(icon, $0) } ?? icon }
+            }
+            if statusItem.button?.title != title { statusItem.button?.title = title }
+        }
         let nowPlaying = sourceName.map { ([$0] + details).joined(separator: "\n") }
         let toolTip = "\(nowPlaying ?? "Radio wyłączone")\n⌃⌥M wycisz · ⌃⌥↑ / ⌃⌥↓ głośność · ⌃⌥L otwórz w Spotify"
         if statusItem.button?.toolTip != toolTip { statusItem.button?.toolTip = toolTip }
@@ -74,6 +77,7 @@ extension AppDelegate {
 
     // A menu never resizes an item's view.
     func menuWillOpen(_ menu: NSMenu) {
+        if menu === statusItem.menu { statusMenuOpen = true }
         let rows = menu.items.compactMap(\.view).map { ($0, ($0 as? MenuRowView)?.fit() ?? volumeRowWidth) }
         // A row's own width counts towards menu.size, so without the reset the menu never shrinks back.
         for (row, width) in rows { row.setFrameSize(NSSize(width: width, height: row.frame.height)) }
@@ -82,7 +86,10 @@ extension AppDelegate {
     }
 
     func menuDidClose(_ menu: NSMenu) {
-        if menu === statusItem.menu { slider?.menuClosed() }
+        guard menu === statusItem.menu else { return }
+        statusMenuOpen = false
+        slider?.menuClosed()
+        refreshIndicators()
     }
 
     func makeStatusMenu() -> NSMenu {

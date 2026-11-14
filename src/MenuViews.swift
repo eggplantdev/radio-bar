@@ -119,7 +119,7 @@ final class RowSlider: NSSlider {
         let filled = NSRect(x: bar.minX, y: bar.minY, width: bar.width * (doubleValue - minValue) / (maxValue - minValue), height: bar.height)
         NSColor.labelColor.withAlphaComponent(0.25).setFill()
         NSBezierPath(roundedRect: bar, xRadius: 2, yRadius: 2).fill()
-        NSColor.labelColor.setFill()
+        (NSColor.labelColor.blended(withFraction: knobShown, of: NSColor(srgbRed: 0.12, green: 0.84, blue: 0.38, alpha: 1)) ?? .labelColor).setFill()
         NSBezierPath(roundedRect: filled, xRadius: 2, yRadius: 2).fill()
         guard knobShown > 0 else { return }
         NSGraphicsContext.saveGraphicsState()
@@ -128,8 +128,9 @@ final class RowSlider: NSSlider {
         shadow.shadowBlurRadius = 2
         shadow.shadowOffset = NSSize(width: 0, height: -0.5)
         shadow.set()
-        NSColor.white.withAlphaComponent(knobShown).setFill()
-        let side = knob * (0.5 + 0.5 * knobShown)
+        // Grows instead of fading: a fading white knob is invisible on the white fill of a dark menu.
+        NSColor.white.setFill()
+        let side = knob * knobShown
         NSBezierPath(ovalIn: NSRect(x: filled.maxX - side / 2, y: bounds.midY - side / 2, width: side, height: side)).fill()
         NSGraphicsContext.restoreGraphicsState()
     }

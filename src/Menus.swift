@@ -64,6 +64,8 @@ extension AppDelegate {
         if let entry = spotifyMenuItems.first(where: { $0.menu === statusItem.menu }) {
             decorate(entry, spotifyImage, "Spotify", show: spotifyAlbum, song: spotifyTrack)
         }
+        // A song arriving while the menu is open can add a line to its row.
+        if statusMenuOpen, let menu = statusItem.menu { fitRows(menu) }
     }
 
     private func decorate(_ entry: NSMenuItem, _ image: NSImage?, _ name: String, show: String?, song: String?) {
@@ -75,9 +77,13 @@ extension AppDelegate {
         entry.action == #selector(playSpotify) ? spotifyActive : entry.tag == current
     }
 
-    // A menu never resizes an item's view.
     func menuWillOpen(_ menu: NSMenu) {
         if menu === statusItem.menu { statusMenuOpen = true }
+        fitRows(menu)
+    }
+
+    // A menu never resizes an item's view.
+    private func fitRows(_ menu: NSMenu) {
         let rows = menu.items.compactMap(\.view).map { ($0, ($0 as? MenuRowView)?.fit() ?? volumeRowWidth) }
         // A row's own width counts towards menu.size, so without the reset the menu never shrinks back.
         for (row, width) in rows { row.setFrameSize(NSSize(width: width, height: row.frame.height)) }

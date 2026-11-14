@@ -37,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     let player = AVPlayer()
     var streamSong: String?
     var statusItem: NSStatusItem!
-    var slider: NSSlider!
+    var slider: RowSlider!
     var volumeRow: NSView!
     var openSourceItem: NSMenuItem!
     var youTubeItem: NSMenuItem!
@@ -59,7 +59,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         icon.size = NSSize(width: iconSide, height: iconSide)
         return icon
     }
-    var source: Source?
+    var source: Source? {
+        didSet { paused = false }
+    }
     var current: Int? {
         if case let .station(index) = source { return index }
         return nil
@@ -132,7 +134,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     func play(station index: Int) {
         stopSpotify()
         source = .station(index)
-        paused = false
         UserDefaults.standard.set(index, forKey: "station")
         startStream()
         refreshIndicators()
@@ -201,7 +202,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     func adoptSpotify() {
         stopRadio()
         source = .spotify
-        paused = false
         UserDefaults.standard.set(spotifyTag, forKey: "station")
     }
 
@@ -229,8 +229,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         if spotifyActive {
             spotifyIfRunning(paused ? "pause" : "play")
         } else if paused {
-            streamSong = nil
-            player.replaceCurrentItem(with: nil)
+            stopRadio()
         } else {
             startStream()
         }

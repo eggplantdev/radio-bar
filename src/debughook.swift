@@ -16,7 +16,7 @@ extension AppDelegate {
             case "up": self.volumeUp()
             case "down": self.volumeDown()
             case "state":
-                log("state screen=\(self.statusItem.button?.window?.screen?.localizedName ?? "-") station=\(self.current.map { stations[$0].name } ?? "off") muted=\(self.muted) volume=\(self.volume) title=\(self.statusItem.button?.title ?? "-") rate=\(self.player.rate) item=\(self.player.currentItem.map { "\($0.status.rawValue)" } ?? "-") streamSong=\(self.streamSong ?? "-") checks=\(self.stationMenuItems.map { $0.state == .on }) logos=\(self.stationMenuItems.map { $0.attributedTitle?.containsAttachments ?? false }) songs=\(self.stationSongs.map { $0 ?? "-" }) shows=\(self.stationShows.map { $0 ?? "-" }) items=\(self.stationMenuItems.map { $0.attributedTitle?.string ?? "" }) spotifyID=\(self.spotifyTrackID ?? "-") youtube=\(self.youTubeTarget?.absoluteString ?? "-") youtubeHidden=\(self.youTubeItem.isHidden) spotify=\(self.spotifyMenuItems.map { "\($0.state == .on):\($0.attributedTitle?.string ?? $0.title)" })")
+                log("state cursorInBackground=\(cursorInBackground) screen=\(self.statusItem.button?.window?.screen?.localizedName ?? "-") station=\(self.current.map { stations[$0].name } ?? "off") muted=\(self.muted) volume=\(self.volume) title=\(self.statusItem.button?.title ?? "-") rate=\(self.player.rate) item=\(self.player.currentItem.map { "\($0.status.rawValue)" } ?? "-") streamSong=\(self.streamSong ?? "-") checks=\(self.stationMenuItems.map { $0.state == .on }) logos=\(self.stationMenuItems.map { $0.attributedTitle?.containsAttachments ?? false }) songs=\(self.stationSongs.map { $0 ?? "-" }) shows=\(self.stationShows.map { $0 ?? "-" }) items=\(self.stationMenuItems.map { $0.attributedTitle?.string ?? "" }) spotifyID=\(self.spotifyTrackID ?? "-") youtube=\(self.youTubeTarget?.absoluteString ?? "-") youtubeHidden=\(self.youTubeItem.isHidden) spotify=\(self.spotifyMenuItems.map { "\($0.state == .on):\($0.attributedTitle?.string ?? $0.title)" })")
             case "popup": DispatchQueue.main.async { _ = self.statusItem.menu?.popUp(positioning: nil, at: NSPoint(x: 400, y: 700), in: nil) }
             case "closemenu": self.statusItem.menu?.cancelTracking()
             case let c where c.hasPrefix("snap "):
@@ -24,27 +24,6 @@ extension AppDelegate {
                 b.cacheDisplay(in: b.bounds, to: rep)
                 try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: String(c.dropFirst(5))))
                 log("snap -> \(b.bounds.size)")
-            case let c where c.hasPrefix("snaprows "):
-                let titles = (self.stationMenuItems + self.spotifyMenuItems).compactMap(\.attributedTitle)
-                let sizes = titles.map { $0.boundingRect(with: NSSize(width: 2000, height: 400), options: .usesLineFragmentOrigin).size }
-                let size = NSSize(width: (sizes.map(\.width).max() ?? 0) + 20, height: sizes.map { $0.height + 12 }.reduce(0, +))
-                let image = NSImage(size: size, flipped: true) { rect in
-                    NSColor.windowBackgroundColor.setFill(); rect.fill()
-                    var y: CGFloat = 6
-                    for (title, s) in zip(titles, sizes) { title.draw(with: NSRect(x: 10, y: y, width: s.width, height: s.height), options: .usesLineFragmentOrigin); y += s.height + 12 }
-                    return true
-                }
-                let rep = NSBitmapImageRep(data: image.tiffRepresentation!)!
-                try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: String(c.dropFirst(9))))
-                log("snaprows \(size)")
-            case let c where c.hasPrefix("snaprow "):
-                let row = self.volumeRow!
-                row.appearance = NSAppearance(named: .darkAqua)
-                row.setFrameSize(NSSize(width: 420, height: row.frame.height))
-                let rep = row.bitmapImageRepForCachingDisplay(in: row.bounds)!
-                row.cacheDisplay(in: row.bounds, to: rep)
-                try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: String(c.dropFirst(8))))
-                log("snaprow")
             case let c where c.hasPrefix("snapmenu "):
                 guard let menu = self.statusItem.menu else { break }
                 let parts = c.dropFirst(9).split(separator: " ")
@@ -53,7 +32,9 @@ extension AppDelegate {
                 let views = target.items.filter { !$0.isHidden }.map { $0.view ?? NSView(frame: NSRect(x: 0, y: 0, width: 10, height: 11)) }
                 let width = views.map(\.frame.width).max() ?? 0
                 let reps = views.map { v -> NSBitmapImageRep in
+                    let appearance = v.appearance
                     v.appearance = NSAppearance(named: .darkAqua)
+                    defer { v.appearance = appearance }
                     let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds)!
                     v.cacheDisplay(in: v.bounds, to: rep)
                     return rep
@@ -66,8 +47,7 @@ extension AppDelegate {
                     return true
                 }
                 try? NSBitmapImageRep(data: image.tiffRepresentation!)!.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: String(parts[0])))
-                let host = NSView(frame: NSRect(origin: .zero, size: size))
-                log("snapmenu \(host.frame.size)")
+                log("snapmenu \(size)")
             case let c where c.hasPrefix("call "):
                 self.perform(NSSelectorFromString(String(c.dropFirst(5)))); log("called \(c.dropFirst(5))")
             case let c where c.hasPrefix("spotify "):

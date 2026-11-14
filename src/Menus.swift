@@ -1,215 +1,5 @@
 import Cocoa
 
-// Like Spotify's volume bar: thin at rest; under the pointer it shows a knob and a pointing hand, and the whole row's height takes a click or a drag — the stock slider takes one only on its thin bar.
-final class RowSlider: NSSlider {
-    private let knob: CGFloat = 12
-    private var dragging = false
-    private var knobShown: CGFloat = 0
-    private var fade: Timer?
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .mouseMoved, .cursorUpdate, .activeAlways, .inVisibleRect], owner: self))
-    }
-
-    required init?(coder: NSCoder) { nil }
-
-    override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
-    override func cursorUpdate(with event: NSEvent) { showHand() }
-
-    private var bar: NSRect { NSRect(x: knob / 2, y: bounds.midY - 2, width: bounds.width - knob, height: 4) }
-
-    // Read live: a menu that closes under the pointer never sends mouseExited, which would leave the knob up next time.
-    private var hovered: Bool {
-        guard let window else { return false }
-        return dragging || bounds.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil))
-    }
-
-    override func mouseEntered(with event: NSEvent) { fadeKnob(); showHand() }
-    override func mouseMoved(with event: NSEvent) { showHand() }
-
-    // The menu resets the cursor to an arrow while it handles each move, so the hand is set once it's done.
-    private func showHand() {
-        NSCursor.pointingHand.set()
-        DispatchQueue.main.async { if self.hovered { NSCursor.pointingHand.set() } }
-    }
-    override func mouseExited(with event: NSEvent) { fadeKnob(); NSCursor.arrow.set() }
-
-    // In the menu's tracking mode too, which a default-mode timer would wait out.
-    private func fadeKnob() {
-        guard fade == nil else { return }
-        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] timer in
-            guard let self else { return timer.invalidate() }
-            let target: CGFloat = self.hovered ? 1 : 0
-            self.knobShown += max(min(target - self.knobShown, 0.15), -0.15)
-            self.needsDisplay = true
-            if self.knobShown == target { timer.invalidate(); self.fade = nil }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        fade = timer
-    }
-
-    // No nextEvent loop of its own: a menu can swallow the mouse-up, and the loop would wait for it forever.
-    override func mouseDown(with event: NSEvent) { dragging = true; follow(event) }
-    override func mouseDragged(with event: NSEvent) { follow(event) }
-    override func mouseUp(with event: NSEvent) { follow(event); dragging = false; fadeKnob() }
-
-    private func follow(_ event: NSEvent) {
-        // A menu hands its views events whose locationInWindow isn't always in this view's window.
-        guard let window else { return }
-        let x = convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil).x
-        doubleValue = minValue + (maxValue - minValue) * min(max((x - bar.minX) / bar.width, 0), 1)
-        sendAction(action, to: target)
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        let bar = bar
-        // Without a fade running, the live pointer decides, so a menu closed under the pointer doesn't reopen with the knob up.
-        let shown = fade == nil ? (hovered ? 1 : 0) : knobShown
-        let filled = NSRect(x: bar.minX, y: bar.minY, width: bar.width * (doubleValue - minValue) / (maxValue - minValue), height: bar.height)
-        NSColor.labelColor.withAlphaComponent(0.25).setFill()
-        NSBezierPath(roundedRect: bar, xRadius: 2, yRadius: 2).fill()
-        NSColor.labelColor.setFill()
-        NSBezierPath(roundedRect: filled, xRadius: 2, yRadius: 2).fill()
-        guard shown > 0 else { return }
-        NSGraphicsContext.saveGraphicsState()
-        let shadow = NSShadow()
-        shadow.shadowColor = NSColor.black.withAlphaComponent(0.35)
-        shadow.shadowBlurRadius = 2
-        shadow.shadowOffset = NSSize(width: 0, height: -0.5)
-        shadow.set()
-        NSColor.white.withAlphaComponent(shown).setFill()
-        let side = knob * (0.5 + 0.5 * shown)
-        NSBezierPath(ovalIn: NSRect(x: filled.maxX - side / 2, y: bounds.midY - side / 2, width: side, height: side)).fill()
-        NSGraphicsContext.restoreGraphicsState()
-    }
-}
-
-// The quiet grey of Control Center's menus (Wi-Fi, Bluetooth); a plain menu item would highlight in the accent colour instead.
-func drawRowHighlight(_ bounds: NSRect) {
-    NSColor.labelColor.withAlphaComponent(0.1).setFill()
-    NSBezierPath(roundedRect: bounds.insetBy(dx: 5, dy: 0), xRadius: 6, yRadius: 6).fill()
-}
-
-// Every row of the status menu draws itself, so they all share one highlight; a source row also keeps the menu open when clicked, so a pause or a switch shows in place.
-final class MenuRowView: NSView {
-    private weak var item: NSMenuItem?
-    private let keepsMenuOpen: Bool
-    private(set) var naturalWidth: CGFloat = 0
-    // Where macOS 26 puts a native row's check, its text and its trailing key equivalent or arrow.
-    private let checkX: CGFloat = 13, textX: CGFloat = 31, trailingInset: CGFloat = 14, minHeight: CGFloat = 24
-
-    init(_ item: NSMenuItem, keepsMenuOpen: Bool = false) {
-        self.item = item
-        self.keepsMenuOpen = keepsMenuOpen
-        super.init(frame: .zero)
-        item.view = self
-        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
-    }
-
-    required init?(coder: NSCoder) { nil }
-
-    override var isFlipped: Bool { true }
-
-    private var title: NSAttributedString {
-        item?.attributedTitle ?? NSAttributedString(string: item?.title ?? "", attributes: [.font: NSFont.menuFont(ofSize: 0)])
-    }
-
-    private var keyEquivalent: NSAttributedString? {
-        guard let item, !item.keyEquivalent.isEmpty else { return nil }
-        let mask = item.keyEquivalentModifierMask
-        let modifiers = [(NSEvent.ModifierFlags.control, "⌃"), (.option, "⌥"), (.shift, "⇧"), (.command, "⌘")].filter { mask.contains($0.0) }.map(\.1)
-        return NSAttributedString(string: modifiers.joined() + item.keyEquivalent.uppercased(), attributes: [.font: NSFont.menuFont(ofSize: 0), .foregroundColor: NSColor.secondaryLabelColor])
-    }
-
-    private var arrow: NSImage? {
-        guard item?.submenu != nil, let symbol = NSImage(systemSymbolName: "chevron.right", accessibilityDescription: nil)?
-            .withSymbolConfiguration(.init(pointSize: 11, weight: .semibold)) else { return nil }
-        return tinted(symbol, .labelColor)
-    }
-
-    private var trailingWidth: CGFloat { keyEquivalent.map { $0.size().width + 24 } ?? arrow.map { $0.size.width + 24 } ?? 0 }
-
-    func fit() {
-        let size = title.boundingRect(with: NSSize(width: 2000, height: 400), options: .usesLineFragmentOrigin).size
-        naturalWidth = ceil(textX + size.width + trailingWidth + 20)
-        setFrameSize(NSSize(width: naturalWidth, height: max(ceil(size.height) + 6, minHeight)))
-    }
-
-    // A row resizing under an open menu relays the whole menu out mid-drag; menuWillOpen sizes it instead.
-    func titleChanged() {
-        if window?.isVisible != true { fit() }
-        needsDisplay = true
-    }
-
-    override func mouseEntered(with event: NSEvent) { needsDisplay = true }
-    // The menu takes the highlight away only after the pointer has left.
-    override func mouseExited(with event: NSEvent) { needsDisplay = true; DispatchQueue.main.async { self.needsDisplay = true } }
-
-    override func mouseUp(with event: NSEvent) {
-        guard let item, item.isEnabled, item.submenu == nil, let action = item.action else { return }
-        if !keepsMenuOpen { item.menu?.cancelTracking() }
-        NSApp.sendAction(action, to: item.target, from: item)
-    }
-
-    private var highlighted: Bool {
-        guard let item, item.isEnabled, item.isHighlighted, let window else { return false }
-        // A highlight the menu left behind on a row the pointer has already left.
-        let pointer = window.mouseLocationOutsideOfEventStream
-        return !(window.contentView?.frame.contains(pointer) ?? false) || bounds.contains(convert(pointer, from: nil))
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        guard let item else { return }
-        if highlighted { drawRowHighlight(bounds) }
-        NSGraphicsContext.current?.cgContext.setAlpha(item.isEnabled ? 1 : 0.35)
-        let text = NSMutableAttributedString(attributedString: title)
-        text.addAttribute(.foregroundColor, value: NSColor.labelColor, range: NSRange(location: 0, length: text.length))
-        let textHeight = ceil(text.boundingRect(with: NSSize(width: 2000, height: 400), options: .usesLineFragmentOrigin).height)
-        let textY = max((bounds.height - textHeight) / 2, 0)
-        text.draw(with: NSRect(x: textX, y: textY, width: bounds.width - textX, height: textHeight), options: .usesLineFragmentOrigin)
-        let lineHeight = min(textHeight, NSLayoutManager().defaultLineHeight(for: .menuFont(ofSize: 0)))
-        if let key = keyEquivalent {
-            let size = key.size()
-            key.draw(at: NSPoint(x: bounds.maxX - trailingInset - size.width, y: textY + (lineHeight - size.height) / 2))
-        } else if let arrow {
-            arrow.draw(in: NSRect(x: bounds.maxX - trailingInset - arrow.size.width, y: (bounds.height - arrow.size.height) / 2, width: arrow.size.width, height: arrow.size.height))
-        }
-        guard item.state == .on, let check = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)?
-            .withSymbolConfiguration(.init(pointSize: NSFont.systemFontSize, weight: .semibold)) else { return }
-        // On the first line, not centred on a row of several.
-        tinted(check, .labelColor).draw(in: NSRect(x: checkX, y: textY + (lineHeight - check.size.height) / 2, width: check.size.width, height: check.size.height))
-    }
-}
-
-// The volume row highlights like the rows above it while the pointer is over it.
-final class VolumeRowView: NSView {
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
-    }
-
-    required init?(coder: NSCoder) { nil }
-
-    override func mouseEntered(with event: NSEvent) { needsDisplay = true }
-    override func mouseExited(with event: NSEvent) { needsDisplay = true }
-
-    override func draw(_ dirtyRect: NSRect) {
-        guard let window, bounds.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil)) else { return }
-        drawRowHighlight(bounds)
-    }
-}
-
-// Draws a template symbol in a colour resolved at draw time, next to images that keep their own colours.
-func tinted(_ image: NSImage, _ color: NSColor) -> NSImage {
-    NSImage(size: image.size, flipped: false) { bounds in
-        image.draw(in: bounds)
-        color.set()
-        bounds.fill(using: .sourceAtop)
-        return true
-    }
-}
-
 extension AppDelegate {
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         let menu = NSMenu()
@@ -223,15 +13,15 @@ extension AppDelegate {
     }
 
     func refreshIndicators() {
-        let level = muted ? "wyciszone" : "\(percent)%"
+        let level = "\(percent)%"
         let sourceName = spotifyActive ? "Spotify" : current.map { stations[$0].name }
         let badge = muted ? "🔇" : nil
         if NSApp.dockTile.badgeLabel != badge { NSApp.dockTile.badgeLabel = badge }
 
         let details = (spotifyActive ? [spotifyAlbum, spotifyTrack] : current.map { [stationShows[$0], songs[$0]] } ?? []).compactMap { $0 }
-        // Every assignment redraws the menu-bar item, even with an equal value.
         let state = muted ? "speaker.slash.fill" : paused ? "pause.fill" : nil
         let imageKey = "\(sourceName ?? "-") \(state ?? "")"
+        // Every assignment redraws the menu-bar item, even with an equal value.
         if imageKey != buttonImageKey {
             buttonImageKey = imageKey
             let icon = spotifyActive ? spotifyImage : current.flatMap { logos[$0] }
@@ -257,8 +47,8 @@ extension AppDelegate {
         // „Otwórz w Spotify” already opens Spotify on the playing track.
         openSourceItem?.isHidden = spotifyActive
         for entry in stationMenuItems + appStationMenuItems + spotifyMenuItems {
-            entry.state = isPlaying(entry) ? .on : .off
-            entry.view?.needsDisplay = true
+            let state: NSControl.StateValue = isPlaying(entry) ? .on : .off
+            if entry.state != state { entry.state = state; entry.view?.needsDisplay = true }
         }
 
         // Volume changes arrive dozens of times a second and change nothing in the rows.
@@ -275,7 +65,7 @@ extension AppDelegate {
 
     private func decorate(_ entry: NSMenuItem, _ image: NSImage?, _ name: String, show: String?, song: String?) {
         entry.attributedTitle = menuTitle(image, name, show: show, song: song)
-        (entry.view as? MenuRowView)?.titleChanged()
+        entry.view?.needsDisplay = true
     }
 
     private func isPlaying(_ entry: NSMenuItem) -> Bool {
@@ -284,13 +74,15 @@ extension AppDelegate {
 
     // A menu never resizes an item's view.
     func menuWillOpen(_ menu: NSMenu) {
-        let rowViews = menu.items.compactMap { $0.view as? MenuRowView }
-        rowViews.forEach { $0.fit() }
-        var rows = rowViews.map { ($0 as NSView, $0.naturalWidth) }
-        if menu.items.contains(where: { $0.view === volumeRow }) { rows.append((volumeRow, volumeRowWidth)) }
+        let rows = menu.items.compactMap(\.view).map { ($0, ($0 as? MenuRowView)?.fit() ?? volumeRowWidth) }
         // A row's own width counts towards menu.size, so without the reset the menu never shrinks back.
         for (row, width) in rows { row.setFrameSize(NSSize(width: width, height: row.frame.height)) }
-        for (row, width) in rows { row.setFrameSize(NSSize(width: max(menu.size.width, width), height: row.frame.height)) }
+        let menuWidth = menu.size.width
+        for (row, width) in rows { row.setFrameSize(NSSize(width: max(menuWidth, width), height: row.frame.height)) }
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        if menu === statusItem.menu { slider?.menuClosed() }
     }
 
     func makeStatusMenu() -> NSMenu {
@@ -298,7 +90,7 @@ extension AppDelegate {
 
         for entry in sourceItems(numbered: false) {
             if entry.action == #selector(playSpotify) { spotifyMenuItems.append(entry) } else { stationMenuItems.append(entry) }
-            _ = MenuRowView(entry, keepsMenuOpen: true)
+            entry.view = MenuRowView(entry, keepsMenuOpen: true)
             menu.addItem(entry)
         }
         menu.addItem(.separator())
@@ -348,7 +140,7 @@ extension AppDelegate {
         menu.addItem(settingsItem())
         menu.addItem(withTitle: "Zakończ", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
         for entry in menu.items + menu.items.flatMap({ $0.submenu?.items ?? [] }) where !entry.isSeparatorItem && entry.view == nil {
-            _ = MenuRowView(entry)
+            entry.view = MenuRowView(entry)
         }
         menu.items.compactMap(\.submenu).forEach { $0.delegate = self }
         return menu

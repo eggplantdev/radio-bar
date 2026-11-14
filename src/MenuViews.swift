@@ -23,6 +23,30 @@ func tinted(_ image: NSImage, _ color: NSColor) -> NSImage {
     }
 }
 
+// The eggplantdev mark from eggplantdev.com: an aubergine of dots, coloured top to bottom along the brand ramp, with a glow.
+func brandMark(height: CGFloat) -> NSImage {
+    let grid = ["0001000", "0011000", "0011100", "0111100", "0111110", "1111110", "1111111", "1111111", "0111110", "0011100"]
+    let ramp: [(CGFloat, CGFloat, CGFloat)] = [(0x10, 0xff, 0xaa), (0x00, 0xe5, 0xff), (0xa8, 0x55, 0xf7), (0xd9, 0x46, 0xef)]
+    let gap = height / CGFloat(grid.count + 1), radius = gap * 2.9 / 8
+    return NSImage(size: NSSize(width: gap * 8, height: height), flipped: true) { _ in
+        for (row, line) in grid.enumerated() {
+            let t = CGFloat(row) / CGFloat(grid.count - 1) * CGFloat(ramp.count - 1)
+            let i = min(Int(t), ramp.count - 2), f = t - CGFloat(i)
+            let (a, b) = (ramp[i], ramp[i + 1])
+            let color = NSColor(srgbRed: (a.0 + (b.0 - a.0) * f) / 255, green: (a.1 + (b.1 - a.1) * f) / 255, blue: (a.2 + (b.2 - a.2) * f) / 255, alpha: 1)
+            let glow = NSShadow()
+            glow.shadowColor = color
+            glow.shadowBlurRadius = radius * 1.6
+            glow.set()
+            color.setFill()
+            for (column, cell) in line.enumerated() where cell == "1" {
+                NSBezierPath(ovalIn: NSRect(x: gap * CGFloat(column + 1) - radius, y: gap * CGFloat(row + 1) - radius, width: radius * 2, height: radius * 2)).fill()
+            }
+        }
+        return true
+    }
+}
+
 // A menu opened from the menu bar leaves Radio in the background, where macOS ignores its cursor changes; this private flag lifts that.
 let cursorInBackground: Bool = {
     typealias DefaultConnection = @convention(c) () -> Int32
@@ -219,7 +243,9 @@ final class MenuRowView: HoverRowView {
         if item.isEnabled, item.isHighlighted { drawRowHighlight(bounds) }
         NSGraphicsContext.current?.cgContext.setAlpha(item.isEnabled ? 1 : 0.35)
         let text = NSMutableAttributedString(attributedString: title)
-        text.addAttribute(.foregroundColor, value: NSColor.labelColor, range: NSRange(location: 0, length: text.length))
+        text.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: text.length)) { color, range, _ in
+            if color == nil { text.addAttribute(.foregroundColor, value: NSColor.labelColor, range: range) }
+        }
         let textHeight = ceil(titleSize.height)
         let textY = max((bounds.height - textHeight) / 2, 0)
         text.draw(with: NSRect(x: textX, y: textY, width: bounds.width - textX, height: textHeight), options: .usesLineFragmentOrigin)

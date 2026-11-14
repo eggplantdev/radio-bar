@@ -146,6 +146,8 @@ extension AppDelegate {
         menu.addItem(openSourceItem)
         menu.addItem(settingsItem())
         menu.addItem(withTitle: "Zakończ", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(footerItem())
         for entry in menu.items + menu.items.flatMap({ $0.submenu?.items ?? [] }) where !entry.isSeparatorItem && entry.view == nil {
             entry.view = MenuRowView(entry)
         }
@@ -205,6 +207,22 @@ extension AppDelegate {
             source.draw(in: rect)
             return true
         }
+    }
+
+    private func footerItem() -> NSMenuItem {
+        let entry = item("eggplantdev.com", #selector(openEggplantdev))
+        let font = NSFont.menuFont(ofSize: 11)
+        let title = NSMutableAttributedString(string: "© 2026 eggplantdev.com  ", attributes: [.font: font, .foregroundColor: NSColor.secondaryLabelColor])
+        let attachment = NSTextAttachment()
+        attachment.image = brandMark(height: 18)
+        attachment.bounds = NSRect(x: 0, y: (font.capHeight - 18) / 2, width: attachment.image!.size.width, height: 18)
+        title.append(NSAttributedString(attachment: attachment))
+        entry.attributedTitle = title
+        return entry
+    }
+
+    @objc func openEggplantdev() {
+        NSWorkspace.shared.open(URL(string: "https://eggplantdev.com")!)
     }
 
     func item(_ title: String, _ action: Selector, _ key: String = "") -> NSMenuItem {

@@ -31,11 +31,11 @@ codesign --force --sign - "$app"
 echo "built $app"
 
 if [[ "${1:-}" == --zip ]]; then
-  version=$(plutil -extract CFBundleShortVersionString raw resources/Info.plist)
+  # One name for every release, so releases/latest/download/Radio.zip in install.sh never changes.
   mkdir -p dist
-  rm -f dist/Radio-$version.zip
-  ditto -c -k --keepParent "$app" dist/Radio-$version.zip
-  echo "packed dist/Radio-$version.zip"
+  rm -f dist/Radio.zip
+  ditto -c -k --keepParent "$app" dist/Radio.zip
+  echo "packed dist/Radio.zip"
 fi
 
 if [[ "${1:-}" == --install ]]; then

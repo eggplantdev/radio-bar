@@ -1,37 +1,64 @@
 # Radio
 
-Native macOS menu-bar player for Radio 357 and Nowy Świat: AVPlayer on each station's public stream,
-a station switcher, a volume slider, mute and global hotkeys. No window; Zakończ stops it.
+Odtwarzacz Radia 357 i Radia Nowy Świat na pasku menu macOS, z przełącznikiem na Spotify.
+Pokazuje, co leci, ma suwak głośności, wyciszanie i skróty klawiszowe działające z każdej aplikacji.
+Lekki: zamiast stron stacji gra sam strumień (~25 MB pamięci).
+
+## Instalacja
+
+Wklej do Terminala (Aplikacje → Narzędzia → Terminal):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eggplantdev/radio-bar/main/install.sh | bash
+```
+
+Skrypt pobiera najnowszą wersję do Aplikacji i ją uruchamia; ikonka pojawia się na pasku menu.
+Ta sama linijka później aktualizuje aplikację. Wymaga macOS 13 lub nowszego, na Macu z Apple Silicon
+albo Intelem.
+
+Bez Terminala: pobierz `Radio.zip` z [najnowszego wydania](https://github.com/eggplantdev/radio-bar/releases/latest),
+rozpakuj i przeciągnij `Radio.app` do Aplikacji. Aplikacja nie jest notaryzowana przez Apple, więc przy
+pierwszym otwarciu macOS ją zablokuje: kliknij Gotowe, potem Ustawienia systemowe → Prywatność
+i ochrona → przewiń w dół → **Otwórz mimo to**.
+
+Odinstalowanie: Zakończ w menu aplikacji i przenieś `Radio.app` do Kosza.
+
+## Obsługa
+
+- Klik w ikonkę na pasku menu: lista stacji i Spotify z tym, co teraz leci, suwak głośności, Ustawienia.
+- Klik w grającą stację pauzuje ją, kolejny wznawia na żywo.
+- Przewijanie na ikonce zmienia głośność.
+- Skróty z każdej aplikacji: ⌃⌥M wycisz, ⌃⌥↑ / ⌃⌥↓ głośność, ⌃⌥L otwórz grający utwór w Spotify.
+- Spotify: wybór „Spotify” steruje aplikacją Spotify — za pierwszym razem macOS zapyta o zgodę.
+- Patroni mogą wkleić swój osobisty link do strumienia: Ustawienia → „<stacja>: własny adres strumienia…”.
+
+---
+
+Everything below is for developers.
 
 ## Build
 
 ```bash
 ./build.sh            # build/Radio.app, universal (arm64 + x86_64), macOS 13+
 ./build.sh --install  # build, replace ~/Applications/Radio.app, relaunch
-./build.sh --zip      # build + dist/Radio-<version>.zip for a GitHub release
+./build.sh --zip      # build + dist/Radio.zip for a GitHub release
 ./build.sh --debug    # build/Radio-debug.app, this Mac's arch only, bundle id pl.local.radio.debug, debug hook compiled in
 ```
 
 Ad-hoc signed, no Xcode project — `swiftc` over `src/*.swift` + a hand-built bundle (`debughook.swift` compiles
 to nothing outside `--debug`). Needs the Command Line Tools
 (`xcode-select --install`). The x86_64 slice links with a harmless `libswiftCompatibilityPacks`
-warning; it has never been run on an Intel Mac.
+warning.
 
 ## Release
 
 1. Bump `CFBundleShortVersionString` and `CFBundleVersion` in `resources/Info.plist`.
 2. `./build.sh --zip`
-3. `gh release create v<version> dist/Radio-<version>.zip --notes "…"`
+3. `gh release create v<version> dist/Radio.zip --notes "…"` — the asset is always `Radio.zip`, so
+   `install.sh` (`releases/latest/download/Radio.zip`) picks up every new release.
 
-## Install (for someone downloading the zip)
-
-The app isn't notarized by Apple, so macOS blocks the first launch once:
-
-1. Unzip, drag `Radio.app` into Applications, open it — macOS says it can't verify the app; click Done.
-2. System Settings → Privacy & Security → scroll down → **Open Anyway**, confirm with your password.
-
-Terminal alternative to step 2: `xattr -dr com.apple.quarantine /Applications/Radio.app`.
-Building from source (`git clone` + `./build.sh --install`) skips the block entirely.
+`install.sh` downloads with `curl`, which sets no quarantine flag, so the unnotarized app opens without
+Gatekeeper's block and without App Translocation.
 
 ## Spotify
 
@@ -59,7 +86,7 @@ browser. YouTube has no Mac app to drive, so that's as far as it goes.
 
 ## Controls
 
-- Menu bar: station logo + volume %; muted: the logo + a crossed-out speaker, Spotify paused: the logo + ⏸ (in place of the %); radio symbol when nothing plays (Spotify quit while it was the source). Scroll on it to
+- Menu bar: station logo + volume %; muted: the logo + a crossed-out speaker, paused: the logo + ⏸ (in place of the %); radio symbol when nothing plays (Spotify quit while it was the source). Scroll on it to
   change volume.
 - Clicking the playing source (status menu, Dock menu, ⌘1 / ⌘2 / ⌘3) pauses it, again resumes it — the status
   menu stays open; a paused station reconnects to the live stream rather than resuming where it stopped.
@@ -114,7 +141,7 @@ site URL („Otwórz stronę stacji”), stream URL, and song / show URLs + pars
   `NSTextAttachment`.
 - **A menu never resizes an item's view** — the volume row and the row views are stretched in `menuWillOpen`.
 - **A plain menu item closes the menu when clicked, and highlights in the accent blue** — every status-menu row
-  is a view (`MenuRowView`) that draws the grey highlight, check, key equivalent and submenu arrow itself; the
+  is a view (`MenuRowView`, in `src/MenuViews.swift`) that draws the grey highlight, check, key equivalent and submenu arrow itself; the
   source rows keep the menu open, the rest close it on mouse-up.
 
 ## Testing tools (`tools/`)
@@ -125,10 +152,9 @@ Compile each with `swiftc tools/<name>.swift -o tools/bin/<name>`.
   check that it plays, mutes, and that volume scales.
 - `send <command>` — drives the debug build over a distributed notification (`station.debug`):
   `mute`, `up`, `down`, `state`, `station N`, `slider N`, `popup`, `closemenu`,
-  `snap <path.png>` (status-item button), `snaprows <path.png>` (the source rows), `snaprow <path.png>`
-  (the volume row), `call <selector>`, `fakesong N text`. `state` also logs the YouTube search URL. Log:
+  `snap <path.png>` (status-item button), `snapmenu <path.png> [sub]` (the status menu's rows, or
+  Ustawienia's, drawn offscreen), `call <selector>`, `fakesong N text`. `state` also logs the YouTube search URL. Log:
   `~/Library/Logs/radio-debug.log`.
-- `mouse move|click|rclick x y` — CGEvent mouse.
 - `upscale in.png out.png` — 8× onto a dark background, to read a `snap` capture.
 - `make-icon out.png` — regenerates the app icon source (then `iconutil` → `resources/AppIcon.icns`).
 
@@ -138,5 +164,4 @@ station in the debug build next to someone's Spotify, launch it with
 `open --env RADIO_NO_SPOTIFY=1 build/Radio-debug.app` (it then ignores Spotify's broadcasts) and set
 `defaults write pl.local.radio.debug volume -float 0` for a silent run that still streams.
 
-The menu bar auto-hides on this Mac, so screenshot the button with `send snap`, and the menu with
-`send popup` (pops it mid-screen).
+With an auto-hiding menu bar, screenshot the button with `send snap` and the menu with `send snapmenu`.

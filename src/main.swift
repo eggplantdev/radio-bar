@@ -68,7 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     var spotifyTrack: String?
     var spotifyAlbum: String?
     var spotifyTrackID: String?
-    var spotifyPaused = false
+    var paused = false
     var stationSongs = [String?](repeating: nil, count: stations.count)
     var stationShows = [String?](repeating: nil, count: stations.count)
     var spotifyMenuItems: [NSMenuItem] = []
@@ -91,6 +91,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         statusItem.button?.imageHugsTitle = true
         statusItem.menu = makeStatusMenu()
         statusItem.menu?.delegate = self
+        // The menu bar moves to whichever display is active, and only a notched one needs the short title.
+        NotificationCenter.default.addObserver(forName: NSWindow.didChangeScreenNotification, object: statusItem.button?.window, queue: .main) { [weak self] _ in
+            self?.refreshIndicators()
+        }
         installScrollVolume()
         installHotKeys()
         observeSpotify()
@@ -128,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     func play(station index: Int) {
         stopSpotify()
         source = .station(index)
+        paused = false
         UserDefaults.standard.set(index, forKey: "station")
         startStream()
         refreshIndicators()
@@ -138,7 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     }
 
     func startStream() {
-        guard let current else { return }
+        guard let current, !paused else { return }
         let item = AVPlayerItem(url: streamURL(current))
         let output = AVPlayerItemMetadataOutput(identifiers: [AVMetadataIdentifier.icyMetadataStreamTitle.rawValue])
         output.setDelegate(self, queue: .main)
@@ -189,17 +194,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     }
 
     @objc func stationChosen(_ sender: NSMenuItem) {
+        if sender.tag == current { return togglePause() }
         play(station: sender.tag)
     }
 
     func adoptSpotify() {
         stopRadio()
         source = .spotify
-        spotifyPaused = false
+        paused = false
         UserDefaults.standard.set(spotifyTag, forKey: "station")
     }
 
     @objc func playSpotify() {
+        if spotifyActive { return togglePause() }
         adoptSpotify()
         spotify("set sound volume to \(spotifyVolume)\nplay\nreturn album of current track & linefeed & artist of current track & \" – \" & name of current track & linefeed & id of current track") { [weak self] result in
             guard let self else { return }
@@ -212,6 +219,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
                 self.source = nil
             }
             self.refreshIndicators()
+        }
+        refreshIndicators()
+    }
+
+    // A live stream resumes from now, not from where it was paused.
+    @objc func togglePause() {
+        paused.toggle()
+        if spotifyActive {
+            spotifyIfRunning(paused ? "pause" : "play")
+        } else if paused {
+            streamSong = nil
+            player.replaceCurrentItem(with: nil)
+        } else {
+            startStream()
         }
         refreshIndicators()
     }

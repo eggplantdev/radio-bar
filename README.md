@@ -61,13 +61,15 @@ browser. YouTube has no Mac app to drive, so that's as far as it goes.
 
 - Menu bar: station logo + volume %; muted: the logo + a crossed-out speaker, Spotify paused: the logo + ⏸ (in place of the %); radio symbol when nothing plays (Spotify quit while it was the source). Scroll on it to
   change volume.
+- Clicking the playing source (status menu, Dock menu, ⌘1 / ⌘2 / ⌘3) pauses it, again resumes it — the status
+  menu stays open; a paused station reconnects to the live stream rather than resuming where it stopped.
 - Global hotkeys: ⌃⌥M mute, ⌃⌥↑ / ⌃⌥↓ volume ±10%, ⌃⌥L open the song in Spotify.
 - In the app: ⌘1 / ⌘2 station, ⌘M mute, ⌘↑ / ⌘↓ volume. Dock menu has stations and mute. There is no
   "off" — Zakończ stops playback; in the status menu the speaker icon mutes.
 - Last station and volume persist in UserDefaults (`station`, `volume`).
 - **Ustawienia** (menu-bar menu and app menu): show in menu bar, show what's playing in the menu bar (on by
-  default; the song, else the show, cut at 40 characters because an item wider than the space left of the
-  notch vanishes), show in Dock (off = menu-bar-only
+  default; the song, else the show, cut at 40 characters on a notched display because an item wider than the
+  space left of the notch vanishes, at 100 elsewhere — re-cut when the menu bar moves to another display), show in Dock (off = menu-bar-only
   app; the last visible one can't be turned off), keep in Dock (edits `com.apple.dock`
   `persistent-apps` and restarts the Dock), launch at login (`SMAppService`). Keep-in-Dock and
   login refuse to run from an App Translocation copy and ask to move the app to Applications first.
@@ -110,9 +112,10 @@ site URL („Otwórz stronę stacji”), stream URL, and song / show URLs + pars
 
 - **macOS 26 menus ignore `NSMenuItem.image`** — station logos ride in `attributedTitle` as an
   `NSTextAttachment`.
-- **A menu never resizes an item's view** — the volume row is stretched in `menuWillOpen`.
-- **`NSMenuItem.onStateImage` is centred on a multi-line row** — the checkmark is a custom image whose
-  height matches the title, so it sits on the first line.
+- **A menu never resizes an item's view** — the volume row and the row views are stretched in `menuWillOpen`.
+- **A plain menu item closes the menu when clicked, and highlights in the accent blue** — every status-menu row
+  is a view (`MenuRowView`) that draws the grey highlight, check, key equivalent and submenu arrow itself; the
+  source rows keep the menu open, the rest close it on mouse-up.
 
 ## Testing tools (`tools/`)
 

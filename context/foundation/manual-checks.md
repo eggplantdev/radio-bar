@@ -84,5 +84,13 @@ you verify them in the running app. A section with unticked boxes is not verifie
 - [ ] Spotify paused: open Radio — the last station plays.
 - [ ] Spotify is the source; press pause in Spotify: the menu bar shows the Spotify logo and ⏸ instead of the %;
       play again: the % comes back.
+- [ ] A station plays; click its row in the menu: it goes silent, the menu bar shows ⏸ and the menu stays open;
+      click again: it plays live. Click another station: it switches, the menu stays open, the tick moves.
+      Hovering any row — stations, „Otwórz stronę stacji”, Ustawienia and its submenu, Zakończ, the volume row — lays the same faint grey rounded highlight under it, like the Wi-Fi menu; never blue. Hovering Ustawienia opens its submenu with the ticks in place. The same on Spotify: Spotify pauses and resumes.
+- [ ] On the ultra-wide display a long song shows up to 100 characters in the menu bar; move the menu bar to the
+      laptop display (click there): it is cut at 40 and stays visible left of the notch.
+- [ ] The gap between the logo and the % matches the gaps around „·”.
+- [ ] Menu → hover the volume bar: a white knob grows in over a moment (the bar keeps its colour) and the pointer becomes a hand;
+      click or drag anywhere in the row's height sets the volume; moving away hides the knob.
 - [ ] Every earlier check in this file still passes (code moved into several files, behaviour unchanged):
       station switch, Spotify takeover, mute, Ustawienia, Dock menu.

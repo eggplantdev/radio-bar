@@ -1,40 +1,35 @@
 # Radio
 
-Odtwarzacz Radia 357 i Radia Nowy Świat na pasku menu macOS, z przełącznikiem na Spotify.
-Pokazuje, co leci, ma suwak głośności, wyciszanie i skróty klawiszowe działające z każdej aplikacji.
-Lekki: zamiast stron stacji gra sam strumień (~25 MB pamięci).
+A macOS menu-bar player for Radio 357 and Radio Nowy Świat, with a switch to Spotify. It shows what's
+playing and has a volume slider, mute, and hotkeys that work from any app. Lightweight: it plays the
+stream itself, without keeping a station's website open in a browser.
 
-## Instalacja
-
-Wklej do Terminala (Aplikacje → Narzędzia → Terminal):
+## Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eggplantdev/radio-bar/main/install.sh | bash
 ```
 
-Skrypt pobiera najnowszą wersję do Aplikacji i ją uruchamia; ikonka pojawia się na pasku menu.
-Ta sama linijka później aktualizuje aplikację. Wymaga macOS 13 lub nowszego, na Macu z Apple Silicon
-albo Intelem.
+The script puts the latest release in Applications and launches it; the icon appears in the menu bar.
+Run it again to update. Needs macOS 13 or later, Apple Silicon or Intel.
 
-Bez Terminala: pobierz `Radio.zip` z [najnowszego wydania](https://github.com/eggplantdev/radio-bar/releases/latest),
-rozpakuj i przeciągnij `Radio.app` do Aplikacji. Aplikacja nie jest notaryzowana przez Apple, więc przy
-pierwszym otwarciu macOS ją zablokuje: kliknij Gotowe, potem Ustawienia systemowe → Prywatność
-i ochrona → przewiń w dół → **Otwórz mimo to**.
+Without Terminal: download `Radio.zip` from the [latest release](https://github.com/eggplantdev/radio-bar/releases/latest),
+unzip it and drag `Radio.app` to Applications. The app isn't verified by Apple, so macOS blocks the first
+launch: click Done, then System Settings → Privacy & Security → scroll down → **Open Anyway**.
 
-Odinstalowanie: Zakończ w menu aplikacji i przenieś `Radio.app` do Kosza.
+Uninstall: quit it from its menu (Zakończ) and move `Radio.app` to the Trash.
 
-## Obsługa
+## Usage
 
-- Klik w ikonkę na pasku menu: lista stacji i Spotify z tym, co teraz leci, suwak głośności, Ustawienia.
-- Klik w grającą stację pauzuje ją, kolejny wznawia na żywo.
-- Przewijanie na ikonce zmienia głośność.
-- Skróty z każdej aplikacji: ⌃⌥M wycisz, ⌃⌥↑ / ⌃⌥↓ głośność, ⌃⌥L otwórz grający utwór w Spotify.
-- Spotify: wybór „Spotify” steruje aplikacją Spotify — za pierwszym razem macOS zapyta o zgodę.
-- Patroni mogą wkleić swój osobisty link do strumienia: Ustawienia → „<stacja>: własny adres strumienia…”.
+The app's menus are in Polish.
+
+- Click the menu-bar icon: stations and Spotify with what's playing now, the volume slider, Ustawienia (settings).
+- Clicking the playing station pauses it; clicking again resumes the live stream.
+- Hotkeys from any app: ⌃⌥M mute, ⌃⌥↑ / ⌃⌥↓ volume, ⌃⌥L open the current song in Spotify.
+- Choosing "Spotify" controls the Spotify app — macOS asks for permission the first time.
+- Patrons can paste their personal stream link: Ustawienia → "<stacja>: własny adres strumienia…".
 
 ---
-
-Everything below is for developers.
 
 ## Build
 
@@ -65,7 +60,7 @@ Spotify's `sound volume` is not linear: loudness goes as roughly (value/100)^3.3
 `audiolevel`), so the slider sends Spotify slider^(1/3.3) — 45% is Spotify's 79.
 
 Saving a song to Liked Songs would need the Web API, whose Development Mode admits only five allowlisted
-accounts per app — so „Otwórz w Spotify” only opens it there.
+accounts per app — so "Otwórz w Spotify" only opens it there.
 
 ## Streams
 
@@ -83,7 +78,7 @@ name), since the APIs lag. The others are polled — songs every 15 s, shows eve
   between songs), `p.n` / `p.a` = show / host.
 - Nowy Świat songs: `nowyswiat.online/api/oZeta/stat` — `data.title` = artist, `data.artist` = song
   (swapped); between songs `title` is "Radio Nowy Świat". It can sit on a stale entry for hours.
-- Nowy Świat show: no API; parsed from the homepage's „Teraz na antenie” slide
+- Nowy Świat show: no API; parsed from the homepage's "Teraz na antenie" slide
   (`.rns-slide-schedule-now`).
 
 ## Adding a station

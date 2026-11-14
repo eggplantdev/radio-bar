@@ -75,7 +75,8 @@ Spotify's own volume (and on quit pauses it, so it doesn't turn loud by itself).
 
 The first command triggers macOS's Automation prompt („Radio chce sterować aplikacją Spotify”); a
 denial shows one alert linking to Privacy & Security → Automation and unticks Spotify. Spotify's `sound volume` is far
-from linear — 20% on the slider is much quieter on Spotify than on the radio.
+from linear — its loudness goes as roughly (value/100)^3.3 (measured with `audiolevel`) — so the slider
+sends Spotify (slider)^(1/3.3): 45% on the slider is Spotify's 79.
 
 „Otwórz w Spotify” (⌃⌥L) opens the current song in Spotify, where its ⊕ saves it to Liked Songs or a
 playlist: the radio's song as a `spotify:search:` query, Spotify's own track by its `Track ID`. Saving it

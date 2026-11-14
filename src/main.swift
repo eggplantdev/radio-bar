@@ -42,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     var openSourceItem: NSMenuItem!
     var youTubeItem: NSMenuItem!
     var buttonImageKey: String?
+    var statusMenuOpen = false
     var muteButton: NSButton!
     var levelLabel: NSTextField!
     var stationMenuItems: [NSMenuItem] = []
@@ -122,7 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
 
     func applicationWillTerminate(_ notification: Notification) {
         guard spotifyActive, muted || spotifyVolumeInFlight else { return }
-        let source = Self.ifRunning("pause\nset sound volume to \(percent)")
+        let source = Self.ifRunning("pause\nset sound volume to \(spotifyLevel)")
         spotifyQueue.sync { _ = NSAppleScript(source: source)?.executeAndReturnError(nil) }
     }
 
@@ -245,7 +246,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     private func stopSpotify() {
         guard spotifyActive else { return }
         // Mute is Spotify's volume 0, which would otherwise outlive Radio switching away from it.
-        spotifyIfRunning("pause\nset sound volume to \(percent)")
+        spotifyIfRunning("pause\nset sound volume to \(spotifyLevel)")
     }
 
     private func fetchNowPlaying(shows: Bool) {
@@ -274,7 +275,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     }
 
     var percent: Int { Int((volume * 100).rounded()) }
-    var spotifyVolume: Int { muted ? 0 : percent }
+    // Spotify's sound volume is loudness ≈ (value/100)^3.3 (measured), the radio's is linear, so the same slider is as loud on both.
+    var spotifyLevel: Int { Int((pow(volume, 1 / 3.3) * 100).rounded()) }
+    var spotifyVolume: Int { muted ? 0 : spotifyLevel }
 
     @objc func toggleMute() {
         muted.toggle()

@@ -19,6 +19,10 @@ extension AppDelegate {
                 log("state cursorInBackground=\(cursorInBackground) screen=\(self.statusItem.button?.window?.screen?.localizedName ?? "-") station=\(self.current.map { stations[$0].name } ?? "off") muted=\(self.muted) volume=\(self.volume) title=\(self.statusItem.button?.title ?? "-") rate=\(self.player.rate) item=\(self.player.currentItem.map { "\($0.status.rawValue)" } ?? "-") streamSong=\(self.streamSong ?? "-") checks=\(self.stationMenuItems.map { $0.state == .on }) logos=\(self.stationMenuItems.map { $0.attributedTitle?.containsAttachments ?? false }) songs=\(self.stationSongs.map { $0 ?? "-" }) shows=\(self.stationShows.map { $0 ?? "-" }) items=\(self.stationMenuItems.map { $0.attributedTitle?.string ?? "" }) spotifyID=\(self.spotifyTrackID ?? "-") youtube=\(self.youTubeTarget?.absoluteString ?? "-") youtubeHidden=\(self.youTubeItem.isHidden) spotify=\(self.spotifyMenuItems.map { "\($0.state == .on):\($0.attributedTitle?.string ?? $0.title)" })")
             case "popup": DispatchQueue.main.async { _ = self.statusItem.menu?.popUp(positioning: nil, at: NSPoint(x: 400, y: 700), in: nil) }
             case "closemenu": self.statusItem.menu?.cancelTracking()
+            case "where":
+                let top = NSScreen.screens.first?.frame.maxY ?? 0
+                let cg = { (r: NSRect) in "x=\(Int(r.minX)) y=\(Int(top - r.maxY)) w=\(Int(r.width)) h=\(Int(r.height))" }
+                log("where item=\(self.statusItem.button?.window.map { cg($0.frame) } ?? "-") on=\(self.statusItem.button?.window?.screen?.localizedName ?? "-") open=\(self.statusMenuOpen) screens=\(NSScreen.screens.map { "\($0.localizedName) \(cg($0.frame))" })")
             case let c where c.hasPrefix("snap "):
                 guard let b = self.statusItem.button, let rep = b.bitmapImageRepForCachingDisplay(in: b.bounds) else { log("snap fail"); break }
                 b.cacheDisplay(in: b.bounds, to: rep)

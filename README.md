@@ -100,6 +100,9 @@ site URL, stream URL, and song / show URLs + parsers.
 - **A menu never resizes an item's view** — row views are stretched in `menuWillOpen`.
 - **A plain menu item closes the menu when clicked and highlights in the accent blue** — every
   status-menu row is a `MenuRowView` that draws its own grey highlight, check, key equivalent and arrow.
+- **A menu with views opens in an ordinary window, pinned to one space** — on a second display showing a
+  full-screen app it landed on the desktop space behind it: the item highlighted and nothing opened.
+  `HoverRowView` lets that window join every space.
 
 ## Testing tools (`tools/`)
 
@@ -108,8 +111,8 @@ Compile each with `swiftc tools/<name>.swift -o tools/bin/<name>`.
 - `audiolevel <bundle-id> <seconds>` — peak RMS of that app's audio via ScreenCaptureKit: the real
   check that it plays, mutes, and that volume scales.
 - `send <command>` — drives the debug build: `mute`, `up`, `down`, `state`, `station N`, `slider N`,
-  `popup`, `closemenu`, `snap <path.png>` (the menu-bar item), `snapmenu <path.png> [sub]` (the menu's
-  rows drawn offscreen, no mouse), `call <selector>`, `fakesong N text`. Log: `~/Library/Logs/radio-debug.log`.
+  `popup`, `closemenu`, `where` (the item's frame and screen, whether the menu is open),
+  `snap <path.png>` (the menu-bar item), `snapmenu <path.png> [sub]` (the menu's rows drawn offscreen, no mouse), `call <selector>`, `fakesong N text`. Log: `~/Library/Logs/radio-debug.log`.
 - `upscale in.png out.png` — 8× onto a dark background, to read a `snap` capture.
 - `make-icon out.png` — regenerates the app icon source (then `iconutil` → `resources/AppIcon.icns`).
 

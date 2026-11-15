@@ -94,3 +94,10 @@ you verify them in the running app. A section with unticked boxes is not verifie
       click or drag anywhere in the row's height sets the volume; moving away hides the knob.
 - [ ] Every earlier check in this file still passes (code moved into several files, behaviour unchanged):
       station switch, Spotify takeover, mute, Ustawienia, Dock menu.
+
+## 2026-11-15 — menu over a full-screen app on a second display
+
+- [ ] An app full-screen on the second display (its menu bar slides in on hover): click the Radio icon there —
+      the menu opens under it on that display, and the display stays on the full-screen app.
+- [ ] The same with an app full-screen on the laptop display, and with no full-screen app on either display:
+      the menu opens as before.

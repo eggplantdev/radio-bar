@@ -24,7 +24,8 @@ Uninstall: quit it from its menu (Zakończ) and move `Radio.app` to the Trash.
 The app's menus are in Polish.
 
 - Click the menu-bar icon: stations and Spotify with what's playing now, the volume slider, Ustawienia (settings).
-- Clicking the playing station pauses it; clicking again resumes the live stream.
+- Clicking the playing station pauses it; clicking again resumes the live stream. ⏯ beside the volume
+  slider does the same; ⏮ ⏭ skip tracks on Spotify.
 - Hotkeys from any app: ⌃⌥M mute, ⌃⌥↑ / ⌃⌥↓ volume, ⌃⌥L open the current song in Spotify.
 - Choosing "Spotify" controls the Spotify app — macOS asks for permission the first time.
 - Patrons can paste their personal stream link: Ustawienia → "<stacja>: własny adres strumienia…".

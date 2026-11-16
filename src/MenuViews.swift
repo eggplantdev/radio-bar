@@ -61,9 +61,13 @@ let cursorInBackground: Bool = {
 final class RowSlider: NSSlider {
     private let knob: CGFloat = 12
     private var dragging = false
-    private var knobShown: CGFloat = 0
-    private var fade: Timer?
     private var hand: Timer?
+    // Pointer anywhere in the row: its highlight, the green fill and the knob come and go together.
+    private(set) var lit = false {
+        didSet { if lit != oldValue { needsDisplay = true; superview?.needsDisplay = true } }
+    }
+
+    func updateLit() { lit = dragging || superview?.pointerInside == true }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -76,19 +80,19 @@ final class RowSlider: NSSlider {
     override func cursorUpdate(with event: NSEvent) { showHand() }
 
     private var bar: NSRect { NSRect(x: knob / 2, y: bounds.midY - 2, width: bounds.width - knob, height: 4) }
-    private var hovered: Bool { dragging || pointerInside }
+    private var overBar: Bool { dragging || pointerInside }
 
-    override func mouseEntered(with event: NSEvent) { fadeKnob(); showHand() }
+    override func mouseEntered(with event: NSEvent) { updateLit(); showHand() }
     // A menu opened with the pointer already over the slider sends no mouseEntered.
-    override func mouseMoved(with event: NSEvent) { if knobShown == 0 { fadeKnob() }; showHand() }
-    override func mouseExited(with event: NSEvent) { fadeKnob(); NSCursor.arrow.set() }
+    override func mouseMoved(with event: NSEvent) { updateLit(); showHand() }
+    override func mouseExited(with event: NSEvent) { updateLit(); NSCursor.arrow.set() }
 
     // The menu sets the arrow again after every event it handles, so the hand is held by a timer while the pointer stays.
     private func showHand() {
         NSCursor.pointingHand.set()
         guard hand == nil else { return }
         let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] timer in
-            guard let self, self.hovered else {
+            guard let self, self.overBar else {
                 timer.invalidate()
                 self?.hand = nil
                 NSCursor.arrow.set()
@@ -100,35 +104,18 @@ final class RowSlider: NSSlider {
         hand = timer
     }
 
-    // In the menu's tracking mode too, which a default-mode timer would wait out.
-    private func fadeKnob() {
-        guard fade == nil else { return }
-        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] timer in
-            guard let self else { return timer.invalidate() }
-            let target: CGFloat = self.hovered ? 1 : 0
-            self.knobShown += max(min(target - self.knobShown, 0.15), -0.15)
-            self.needsDisplay = true
-            if self.knobShown == target { timer.invalidate(); self.fade = nil }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        fade = timer
-    }
-
     // A menu closed mid-drag or under the pointer sends neither mouseUp nor mouseExited.
     func menuClosed() {
         hand?.invalidate()
         hand = nil
-        fade?.invalidate()
-        fade = nil
         dragging = false
-        knobShown = 0
-        needsDisplay = true
+        lit = false
     }
 
     // No nextEvent loop of its own: a menu can swallow the mouse-up, and the loop would wait for it forever.
     override func mouseDown(with event: NSEvent) { dragging = true; follow(event) }
     override func mouseDragged(with event: NSEvent) { follow(event) }
-    override func mouseUp(with event: NSEvent) { follow(event); dragging = false; fadeKnob() }
+    override func mouseUp(with event: NSEvent) { follow(event); dragging = false; updateLit() }
 
     private func follow(_ event: NSEvent) {
         // A menu hands its views events whose locationInWindow isn't always in this view's window.
@@ -143,19 +130,17 @@ final class RowSlider: NSSlider {
         let filled = NSRect(x: bar.minX, y: bar.minY, width: bar.width * (doubleValue - minValue) / (maxValue - minValue), height: bar.height)
         NSColor.labelColor.withAlphaComponent(0.25).setFill()
         NSBezierPath(roundedRect: bar, xRadius: 2, yRadius: 2).fill()
-        (NSColor.labelColor.blended(withFraction: knobShown, of: NSColor(srgbRed: 0.12, green: 0.84, blue: 0.38, alpha: 1)) ?? .labelColor).setFill()
+        (lit ? NSColor(srgbRed: 0.12, green: 0.84, blue: 0.38, alpha: 1) : .labelColor).setFill()
         NSBezierPath(roundedRect: filled, xRadius: 2, yRadius: 2).fill()
-        guard knobShown > 0 else { return }
+        guard lit else { return }
         NSGraphicsContext.saveGraphicsState()
         let shadow = NSShadow()
         shadow.shadowColor = NSColor.black.withAlphaComponent(0.35)
         shadow.shadowBlurRadius = 2
         shadow.shadowOffset = NSSize(width: 0, height: -0.5)
         shadow.set()
-        // Grows instead of fading: a fading white knob is invisible on the white fill of a dark menu.
         NSColor.white.setFill()
-        let side = knob * knobShown
-        NSBezierPath(ovalIn: NSRect(x: filled.maxX - side / 2, y: bounds.midY - side / 2, width: side, height: side)).fill()
+        NSBezierPath(ovalIn: NSRect(x: filled.maxX - knob / 2, y: bounds.midY - knob / 2, width: knob, height: knob)).fill()
         NSGraphicsContext.restoreGraphicsState()
     }
 }
@@ -178,9 +163,63 @@ class HoverRowView: NSView {
     override func mouseExited(with event: NSEvent) { needsDisplay = true; DispatchQueue.main.async { self.needsDisplay = true } }
 }
 
-final class VolumeRowView: HoverRowView {
+// Its own highlight, on top of the whole row's, shows which button a click lands on.
+final class TransportButton: NSButton {
+    init(_ description: String, target: AnyObject, action: Selector) {
+        super.init(frame: .zero)
+        self.target = target
+        self.action = action
+        isBordered = false
+        focusRingType = .none
+        imagePosition = .imageOnly
+        setAccessibilityLabel(description)
+        // A menu's window never becomes key, so an untinted button draws its symbol in the inactive grey.
+        contentTintColor = .labelColor
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    var symbol = "" {
+        didSet {
+            guard symbol != oldValue else { return }
+            image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?.withSymbolConfiguration(.init(pointSize: 15, weight: .regular))
+        }
+    }
+
+    override var isEnabled: Bool {
+        didSet { alphaValue = isEnabled ? 1 : 0.35 }
+    }
+
+    override func mouseEntered(with event: NSEvent) { needsDisplay = true }
+    override func mouseExited(with event: NSEvent) { needsDisplay = true }
+
     override func draw(_ dirtyRect: NSRect) {
-        if pointerInside { drawRowHighlight(bounds) }
+        if isEnabled, pointerInside {
+            NSColor.labelColor.withAlphaComponent(0.1).setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6).fill()
+        }
+        super.draw(dirtyRect)
+    }
+}
+
+final class VolumeRowView: HoverRowView {
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        // A menu opened with the pointer already in the row sends no mouseEntered.
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeAlways, .inVisibleRect], owner: self))
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    private var slider: RowSlider? { subviews.lazy.compactMap { $0 as? RowSlider }.first }
+
+    override func mouseEntered(with event: NSEvent) { slider?.updateLit() }
+    override func mouseExited(with event: NSEvent) { slider?.updateLit() }
+    override func mouseMoved(with event: NSEvent) { slider?.updateLit() }
+
+    override func draw(_ dirtyRect: NSRect) {
+        if slider?.lit == true { drawRowHighlight(bounds) }
     }
 }
 

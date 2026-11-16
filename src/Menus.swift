@@ -47,6 +47,11 @@ extension AppDelegate {
         muteButton?.image = NSImage(systemSymbolName: speaker, accessibilityDescription: "Wycisz")?
             .withSymbolConfiguration(.init(pointSize: 15, weight: .regular))
         levelLabel?.stringValue = muted ? "—" : level
+        playPauseButton?.symbol = paused ? "play.fill" : "pause.fill"
+        playPauseButton?.isEnabled = source != nil
+        // A live stream has no previous or next song.
+        previousButton?.isEnabled = spotifyActive
+        nextButton?.isEnabled = spotifyActive
         // „Otwórz w Spotify” already opens Spotify on the playing track.
         openSourceItem?.isHidden = spotifyActive
         for entry in stationMenuItems + appStationMenuItems + spotifyMenuItems {
@@ -116,6 +121,16 @@ extension AppDelegate {
         youTubeItem.isHidden = !showsYouTubeSearch
         menu.addItem(youTubeItem)
 
+        previousButton = TransportButton("Poprzedni utwór", target: self, action: #selector(previousTrack))
+        playPauseButton = TransportButton("Odtwórz / wstrzymaj", target: self, action: #selector(togglePause))
+        nextButton = TransportButton("Następny utwór", target: self, action: #selector(nextTrack))
+        previousButton.symbol = "backward.fill"
+        nextButton.symbol = "forward.fill"
+        for (index, button) in [previousButton!, playPauseButton!, nextButton!].enumerated() {
+            button.frame = NSRect(x: 250 + CGFloat(index) * 26, y: 6, width: 26, height: 28)
+            button.autoresizingMask = .minXMargin
+        }
+
         muteButton = NSButton(image: NSImage(), target: self, action: #selector(toggleMute))
         muteButton.isBordered = false
         muteButton.focusRingType = .none
@@ -131,18 +146,18 @@ extension AppDelegate {
         slider.target = self
         slider.action = #selector(sliderMoved(_:))
         slider.isContinuous = true
-        slider.frame = NSRect(x: 56, y: 0, width: 186, height: 40)
+        slider.frame = NSRect(x: 56, y: 0, width: 142, height: 40)
         slider.autoresizingMask = .width
 
         levelLabel = NSTextField(labelWithString: "")
         levelLabel.alignment = .right
         levelLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-        levelLabel.frame = NSRect(x: 248, y: 11, width: 40, height: 18)
+        levelLabel.frame = NSRect(x: 204, y: 11, width: 40, height: 18)
         levelLabel.autoresizingMask = .minXMargin
 
         let row = VolumeRowView(frame: NSRect(x: 0, y: 0, width: volumeRowWidth, height: 40))
         volumeRow = row
-        [muteButton, slider, levelLabel].forEach { row.addSubview($0!) }
+        [previousButton, playPauseButton, nextButton, muteButton, slider, levelLabel].forEach { row.addSubview($0!) }
         let rowItem = NSMenuItem()
         rowItem.view = row
         menu.addItem(rowItem)

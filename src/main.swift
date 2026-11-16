@@ -27,7 +27,7 @@ private let hotKeys: [(id: UInt32, key: Int, action: Selector)] = [
 ]
 
 let iconSide: CGFloat = 18
-let volumeRowWidth: CGFloat = 300
+let volumeRowWidth: CGFloat = 340
 private let session = URLSession(configuration: .ephemeral)
 
 // Built from an ASCII set: on macOS 13 URL(string:) returns nil for an unescaped „ą”.
@@ -44,6 +44,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     var buttonImageKey: String?
     var statusMenuOpen = false
     var muteButton: NSButton!
+    var previousButton: TransportButton!
+    var playPauseButton: TransportButton!
+    var nextButton: TransportButton!
     var levelLabel: NSTextField!
     var stationMenuItems: [NSMenuItem] = []
     var appStationMenuItems: [NSMenuItem] = []
@@ -235,6 +238,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
             startStream()
         }
         refreshIndicators()
+    }
+
+    @objc func previousTrack() {
+        if spotifyActive { spotifyIfRunning("previous track") }
+    }
+
+    @objc func nextTrack() {
+        if spotifyActive { spotifyIfRunning("next track") }
     }
 
     private func stopRadio() {

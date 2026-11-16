@@ -90,8 +90,8 @@ you verify them in the running app. A section with unticked boxes is not verifie
 - [ ] On the ultra-wide display a long song shows up to 100 characters in the menu bar; move the menu bar to the
       laptop display (click there): it is cut at 40 and stays visible left of the notch.
 - [ ] The gap between the logo and the % matches the gaps around „·”.
-- [ ] Menu → hover the volume bar: a white knob grows in over a moment (the bar keeps its colour) and the pointer becomes a hand;
-      click or drag anywhere in the row's height sets the volume; moving away hides the knob.
+- [ ] Menu → hover the volume bar: the pointer becomes a hand; click or drag anywhere in the row's height sets the volume
+      (the knob and green fill are covered in § 2026-11-16).
 - [ ] Every earlier check in this file still passes (code moved into several files, behaviour unchanged):
       station switch, Spotify takeover, mute, Ustawienia, Dock menu.
 
@@ -101,3 +101,15 @@ you verify them in the running app. A section with unticked boxes is not verifie
       the menu opens under it on that display, and the display stays on the full-screen app.
 - [ ] The same with an app full-screen on the laptop display, and with no full-screen app on either display:
       the menu opens as before.
+
+## 2026-11-16 — ⏮ ⏯ ⏭ beside the volume slider
+
+- [ ] Menu while a station plays: right of the volume % sit ⏮ ⏯ ⏭; ⏮ ⏭ are greyed and do nothing, ⏯ shows ⏸ —
+      click it: the station stops, the icon turns ▶ and the playing row shows paused; click again: live stream resumes.
+- [ ] Menu while Spotify plays: ⏮ ⏭ are lit — ⏭ skips to the next track, ⏮ goes back; the Spotify row updates
+      to the new track while the menu stays open. ⏯ pauses and resumes Spotify.
+- [ ] Switch from a station to Spotify with the menu open: ⏮ ⏭ light up in place, the menu doesn't shift.
+- [ ] Move the pointer into the volume row anywhere (🔈, bar, %, the buttons): the grey row highlight, the green fill
+      and the white knob all appear in the same instant, no fade; leaving the row hides all three at once.
+- [ ] Hover each of ⏮ ⏯ ⏭: its own grey rounded highlight appears instantly on top of the row's.
+- [ ] Open the menu with the pointer already where the volume row lands: the row is lit as soon as the pointer moves.

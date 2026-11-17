@@ -268,8 +268,8 @@ final class MenuRowView: HoverRowView {
     func fit() -> CGFloat {
         let size = titleSize
         let trailing = (keyEquivalent?.size().width ?? arrow?.size.width).map { $0 + 24 } ?? 0
-        let width = ceil(textX + size.width + trailing + 20)
-        setFrameSize(NSSize(width: width, height: max(ceil(size.height) + 6, minHeight)))
+        let width = ceil(textX + size.width + trailing + 30)
+        setFrameSize(NSSize(width: width, height: max(ceil(size.height) + 12, minHeight)))
         return width
     }
 

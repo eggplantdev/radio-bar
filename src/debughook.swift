@@ -22,7 +22,7 @@ extension AppDelegate {
             case "where":
                 let top = NSScreen.screens.first?.frame.maxY ?? 0
                 let cg = { (r: NSRect) in "x=\(Int(r.minX)) y=\(Int(top - r.maxY)) w=\(Int(r.width)) h=\(Int(r.height))" }
-                log("where item=\(self.statusItem.button?.window.map { cg($0.frame) } ?? "-") on=\(self.statusItem.button?.window?.screen?.localizedName ?? "-") open=\(self.statusMenuOpen) screens=\(NSScreen.screens.map { "\($0.localizedName) \(cg($0.frame))" })")
+                log("where item=\(self.statusItem.button?.window.map { cg($0.frame) } ?? "-") on=\(self.statusItem.button?.window?.screen?.localizedName ?? "-") open=\(self.statusMenuOpen) screens=\(NSScreen.screens.map { "\($0.localizedName) \(cg($0.frame))" }) windows=\(NSApp.windows.map { "\($0.windowNumber) \(type(of: $0)) level=\($0.level.rawValue) behavior=\($0.collectionBehavior.rawValue) visible=\($0.isVisible) \(cg($0.frame))" })")
             case let c where c.hasPrefix("snap "):
                 guard let b = self.statusItem.button, let rep = b.bitmapImageRepForCachingDisplay(in: b.bounds) else { log("snap fail"); break }
                 b.cacheDisplay(in: b.bounds, to: rep)

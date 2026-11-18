@@ -101,9 +101,11 @@ site URL, stream URL, and song / show URLs + parsers.
 - **A menu never resizes an item's view** — row views are stretched in `menuWillOpen`.
 - **A plain menu item closes the menu when clicked and highlights in the accent blue** — every
   status-menu row is a `MenuRowView` that draws its own grey highlight, check, key equivalent and arrow.
-- **A menu with views opens in an ordinary window, pinned to one space** — on a second display showing a
-  full-screen app it landed on the desktop space behind it: the item highlighted and nothing opened.
-  `HoverRowView` lets that window join every space.
+- **Unsolved: the menu doesn't open over a full-screen app on the second display** — the visible menu
+  window (layer 101, with a 75 pt shadow margin) is created on that display's desktop space, so it stays
+  hidden behind the full-screen space. `HoverRowView` makes the rows' own window join every space, but that
+  window is never the one on screen. Not enough on their own: the same collection behaviour on every
+  `NSApp.windows` entry, and `CGSAddWindowsToSpaces` from `menuWillOpen`. Watch it with `spaces`.
 
 ## Testing tools (`tools/`)
 
@@ -114,6 +116,8 @@ Compile each with `swiftc tools/<name>.swift -o tools/bin/<name>`.
 - `send <command>` — drives the debug build: `mute`, `up`, `down`, `state`, `station N`, `slider N`,
   `popup`, `closemenu`, `where` (the item's frame and screen, whether the menu is open),
   `snap <path.png>` (the menu-bar item), `snapmenu <path.png> [sub]` (the menu's rows drawn offscreen, no mouse), `call <selector>`, `fakesong N text`. Log: `~/Library/Logs/radio-debug.log`.
+- `spaces <pid> <seconds>` — logs every window of that process with its layer and spaces, and each
+  display's current space, whenever they change.
 - `upscale in.png out.png` — 8× onto a dark background, to read a `snap` capture.
 - `make-icon out.png` — regenerates the app icon source (then `iconutil` → `resources/AppIcon.icns`).
 

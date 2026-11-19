@@ -101,11 +101,13 @@ site URL, stream URL, and song / show URLs + parsers.
 - **A menu never resizes an item's view** — row views are stretched in `menuWillOpen`.
 - **A plain menu item closes the menu when clicked and highlights in the accent blue** — every
   status-menu row is a `MenuRowView` that draws its own grey highlight, check, key equivalent and arrow.
-- **Unsolved: the menu doesn't open over a full-screen app on the second display** — the visible menu
-  window (layer 101, with a 75 pt shadow margin) is created on that display's desktop space, so it stays
-  hidden behind the full-screen space. `HoverRowView` makes the rows' own window join every space, but that
-  window is never the one on screen. Not enough on their own: the same collection behaviour on every
-  `NSApp.windows` entry, and `CGSAddWindowsToSpaces` from `menuWillOpen`. Watch it with `spaces`.
+- **With the Dock icon on, the menu sometimes doesn't open over a full-screen app on the second display** —
+  as a regular app, Radio gets its visible menu window (layer 101, with a 75 pt shadow margin, a new one
+  per click) placed on that display's desktop space, hidden behind the full-screen space. As an accessory
+  app („Pokazuj w Docku” off) the menu opens there every time. `HoverRowView` makes the rows' own window
+  join every space, but that window is never the one on screen. Not enough on their own: the same
+  collection behaviour on every `NSApp.windows` entry, and `CGSAddWindowsToSpaces` from `menuWillOpen`.
+  Watch it with `spaces`.
 
 ## Testing tools (`tools/`)
 

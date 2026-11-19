@@ -1,22 +1,9 @@
 import Cocoa
 
 extension AppDelegate {
-    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
-        let menu = NSMenu()
-        for entry in sourceItems(numbered: false) {
-            entry.state = isPlaying(entry) ? .on : .off
-            menu.addItem(entry)
-        }
-        menu.addItem(.separator())
-        menu.addItem(item(muted ? "Włącz dźwięk" : "Wycisz", #selector(toggleMute)))
-        return menu
-    }
-
     func refreshIndicators() {
         let level = "\(percent)%"
         let sourceName = spotifyActive ? "Spotify" : current.map { stations[$0].name }
-        let badge = muted ? "🔇" : nil
-        if NSApp.dockTile.badgeLabel != badge { NSApp.dockTile.badgeLabel = badge }
 
         let details = (spotifyActive ? [spotifyAlbum, spotifyTrack] : current.map { [stationShows[$0], songs[$0]] } ?? []).compactMap { $0 }
         let state = muted ? "speaker.slash.fill" : paused ? "pause.fill" : nil

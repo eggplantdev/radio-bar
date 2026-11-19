@@ -64,7 +64,7 @@ extension AppDelegate {
                 self.stationSongs[Int(String(rest.prefix(1)))!] = String(rest.dropFirst(2))
                 self.refreshIndicators(); log("fakesong")
             case "settings":
-                let states = ["toggleMenuBarIcon", "toggleDockIcon", "toggleKeepInDock", "toggleLaunchAtLogin"].map { name -> String in
+                let states = ["toggleNowPlaying", "toggleYouTubeSearch", "toggleLaunchAtLogin"].map { name -> String in
                     let probe = NSMenuItem(title: name, action: NSSelectorFromString(name), keyEquivalent: "")
                     let enabled = self.validateMenuItem(probe)
                     return "\(name)=\(probe.state == .on ? "on" : "off")\(enabled ? "" : "(disabled)")"

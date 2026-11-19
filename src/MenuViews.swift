@@ -278,7 +278,7 @@ final class MenuRowView: HoverRowView {
         let target = item.target
         if keepsMenuOpen { NSApp.sendAction(action, to: target, from: item); return }
         item.menu?.cancelTracking()
-        // The default mode never runs inside the menu's tracking, so a modal alert or a Dock restart waits until it has closed.
+        // The default mode never runs inside the menu's tracking, so a modal alert waits until it has closed.
         RunLoop.main.perform(inModes: [.default]) { NSApp.sendAction(action, to: target, from: item) }
     }
 

@@ -92,7 +92,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         NSApp.mainMenu = makeMenu()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.autosaveName = "radio"
-        if NSApp.activationPolicy() != .regular { statusItem.isVisible = true }
+        // autosaveName restores a hidden item, and with no Dock icon nothing could show it again.
+        statusItem.isVisible = true
         statusItem.button?.imagePosition = .imageLeft
         statusItem.button?.imageHugsTitle = true
         statusItem.menu = makeStatusMenu()
@@ -378,9 +379,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     }
 }
 
-UserDefaults.standard.register(defaults: ["volume": 1.0, "showsNowPlaying": true, "showsDockIcon": true])
+UserDefaults.standard.register(defaults: ["volume": 1.0, "showsNowPlaying": true])
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
-app.setActivationPolicy(UserDefaults.standard.bool(forKey: "showsDockIcon") ? .regular : .accessory)
 app.run()

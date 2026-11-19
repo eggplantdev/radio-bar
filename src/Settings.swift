@@ -31,10 +31,6 @@ extension AppDelegate {
         }
     }
 
-    @objc func toggleMenuBarIcon() {
-        statusItem.isVisible.toggle()
-    }
-
     var showsNowPlaying: Bool { UserDefaults.standard.bool(forKey: "showsNowPlaying") }
 
     @objc func toggleNowPlaying() {
@@ -47,33 +43,6 @@ extension AppDelegate {
     @objc func toggleYouTubeSearch() {
         UserDefaults.standard.set(!showsYouTubeSearch, forKey: "showsYouTubeSearch")
         youTubeItem.isHidden = !showsYouTubeSearch
-    }
-
-    @objc func toggleDockIcon() {
-        let shows = NSApp.activationPolicy() != .regular
-        UserDefaults.standard.set(shows, forKey: "showsDockIcon")
-        NSApp.setActivationPolicy(shows ? .regular : .accessory)
-    }
-
-    @objc func toggleKeepInDock() {
-        guard var tiles = dockTiles() else { return NSSound.beep() }
-        if let index = tiles.firstIndex(where: isOwnTile) {
-            tiles.remove(at: index)
-        } else {
-            guard isInstalled() else { return }
-            tiles.append([
-                "tile-type": "file-tile",
-                "tile-data": [
-                    "bundle-identifier": Bundle.main.bundleIdentifier ?? "",
-                    "file-label": "Radio",
-                    "file-data": ["_CFURLString": Bundle.main.bundleURL.absoluteString, "_CFURLStringType": 15],
-                ],
-            ])
-        }
-        CFPreferencesSetAppValue("persistent-apps" as CFString, tiles as NSArray, "com.apple.dock" as CFString)
-        CFPreferencesAppSynchronize("com.apple.dock" as CFString)
-        // The Dock reads persistent-apps only when it starts.
-        _ = try? Process.run(URL(fileURLWithPath: "/usr/bin/killall"), arguments: ["Dock"])
     }
 
     @objc func toggleLaunchAtLogin() {
@@ -92,20 +61,11 @@ extension AppDelegate {
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        let showsDockIcon = NSApp.activationPolicy() == .regular
         switch menuItem.action {
-        case #selector(toggleMenuBarIcon):
-            menuItem.state = statusItem.isVisible ? .on : .off
-            return showsDockIcon
         case #selector(toggleNowPlaying):
             menuItem.state = showsNowPlaying ? .on : .off
         case #selector(toggleYouTubeSearch):
             menuItem.state = showsYouTubeSearch ? .on : .off
-        case #selector(toggleDockIcon):
-            menuItem.state = showsDockIcon ? .on : .off
-            return statusItem.isVisible
-        case #selector(toggleKeepInDock):
-            menuItem.state = dockTiles()?.contains(where: isOwnTile) == true ? .on : .off
         case #selector(toggleLaunchAtLogin):
             menuItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
         case #selector(findInSpotify):
@@ -116,18 +76,6 @@ extension AppDelegate {
             break
         }
         return true
-    }
-
-    // nil when unreadable: writing a list built from nothing would wipe the user's Dock.
-    private func dockTiles() -> [[String: Any]]? {
-        CFPreferencesCopyAppValue("persistent-apps" as CFString, "com.apple.dock" as CFString) as? [[String: Any]]
-    }
-
-    private func isOwnTile(_ tile: [String: Any]) -> Bool {
-        let data = tile["tile-data"] as? [String: Any]
-        if let id = data?["bundle-identifier"] as? String { return id == Bundle.main.bundleIdentifier }
-        let url = ((data?["file-data"] as? [String: Any])?["_CFURLString"] as? String).flatMap(URL.init(string:))
-        return url?.standardizedFileURL.path == Bundle.main.bundleURL.standardizedFileURL.path
     }
 
     // A quarantined app launched from Downloads runs from a random read-only copy that vanishes on quit.
@@ -142,11 +90,8 @@ extension AppDelegate {
 
     func settingsItem() -> NSMenuItem {
         let menu = NSMenu(title: "Ustawienia")
-        menu.addItem(item("Pokazuj w pasku menu", #selector(toggleMenuBarIcon)))
         menu.addItem(item("Pokazuj, co leci, w pasku menu", #selector(toggleNowPlaying)))
         menu.addItem(item("Pokazuj „Szukaj na YouTube”", #selector(toggleYouTubeSearch)))
-        menu.addItem(item("Pokazuj w Docku", #selector(toggleDockIcon)))
-        menu.addItem(item("Zachowaj w Docku", #selector(toggleKeepInDock)))
         menu.addItem(item("Uruchamiaj przy logowaniu", #selector(toggleLaunchAtLogin)))
         menu.addItem(.separator())
         for (index, station) in stations.enumerated() {

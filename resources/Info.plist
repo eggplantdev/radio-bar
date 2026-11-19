@@ -18,6 +18,8 @@
 	<string>1.2</string>
 	<key>CFBundleVersion</key>
 	<string>3</string>
+	<key>LSUIElement</key>
+	<true/>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>NSAppTransportSecurity</key>

@@ -17,8 +17,7 @@ extension AppDelegate {
             alert.addButton(withTitle: "Zapisz")
             alert.addButton(withTitle: "Anuluj")
             alert.window.initialFirstResponder = field
-            NSApp.activate(ignoringOtherApps: true)
-            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            guard alert.runInFront() == .alertFirstButtonReturn else { return }
             let text = field.stringValue.trimmingCharacters(in: .whitespaces)
             let url = URL(string: text)
             guard text.isEmpty || (["http", "https"].contains(url?.scheme?.lowercased()) && url?.host != nil) else {
@@ -56,7 +55,7 @@ extension AppDelegate {
                 if service.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
             }
         } catch {
-            NSAlert(error: error).runModal()
+            NSAlert(error: error).runInFront()
         }
     }
 
@@ -84,7 +83,7 @@ extension AppDelegate {
         let alert = NSAlert()
         alert.messageText = "Najpierw przenieś Radio do folderu Aplikacje"
         alert.informativeText = "Dopóki apka leży w Pobranych, macOS uruchamia ją z tymczasowej kopii. Przeciągnij Radio do Aplikacji i otwórz ponownie."
-        alert.runModal()
+        alert.runInFront()
         return false
     }
 
@@ -102,5 +101,14 @@ extension AppDelegate {
         let entry = NSMenuItem(title: "Ustawienia", action: nil, keyEquivalent: "")
         entry.submenu = menu
         return entry
+    }
+}
+
+extension NSAlert {
+    // Radio is never the active app when its menu closes, so the alert would open behind the front window.
+    @discardableResult
+    func runInFront() -> NSApplication.ModalResponse {
+        NSApp.activate(ignoringOtherApps: true)
+        return runModal()
     }
 }

@@ -67,8 +67,7 @@ extension AppDelegate {
         alert.informativeText = "Włącz Spotify przy Radio w Ustawieniach systemowych → Prywatność i ochrona → Automatyzacja."
         alert.addButton(withTitle: "Otwórz Ustawienia")
         alert.addButton(withTitle: "Anuluj")
-        NSApp.activate(ignoringOtherApps: true)
-        if alert.runModal() == .alertFirstButtonReturn {
+        if alert.runInFront() == .alertFirstButtonReturn {
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!)
         }
     }

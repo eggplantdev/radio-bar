@@ -41,7 +41,7 @@ extension AppDelegate {
         nextButton?.isEnabled = spotifyActive
         // „Otwórz w Spotify” already opens Spotify on the playing track.
         openSourceItem?.isHidden = spotifyActive
-        for entry in stationMenuItems + appStationMenuItems + spotifyMenuItems {
+        for entry in stationMenuItems + [spotifyMenuItem].compactMap({ $0 }) {
             let state: NSControl.StateValue = isPlaying(entry) ? .on : .off
             if entry.state != state { entry.state = state; entry.view?.needsDisplay = true }
         }
@@ -53,7 +53,7 @@ extension AppDelegate {
         for (index, entry) in stationMenuItems.enumerated() {
             decorate(entry, logos[index], stations[index].name, show: stationShows[index], song: songs[index])
         }
-        if let entry = spotifyMenuItems.first(where: { $0.menu === statusItem.menu }) {
+        if let entry = spotifyMenuItem {
             decorate(entry, spotifyImage, "Spotify", show: spotifyAlbum, song: spotifyTrack)
         }
         // A song arriving while the menu is open can add a line to its row.
@@ -93,8 +93,8 @@ extension AppDelegate {
     func makeStatusMenu() -> NSMenu {
         let menu = NSMenu()
 
-        for entry in sourceItems(numbered: false) {
-            if entry.action == #selector(playSpotify) { spotifyMenuItems.append(entry) } else { stationMenuItems.append(entry) }
+        for entry in sourceItems() {
+            if entry.action == #selector(playSpotify) { spotifyMenuItem = entry } else { stationMenuItems.append(entry) }
             entry.view = MenuRowView(entry, keepsMenuOpen: true)
             menu.addItem(entry)
         }
@@ -247,25 +247,22 @@ extension AppDelegate {
         return entry
     }
 
-    private func sourceItems(numbered: Bool) -> [NSMenuItem] {
+    private func sourceItems() -> [NSMenuItem] {
         var entries = stations.enumerated().map { index, station in
-            let entry = item(station.name, #selector(stationChosen(_:)), numbered ? "\(index + 1)" : "")
+            let entry = item(station.name, #selector(stationChosen(_:)))
             entry.tag = index
             return entry
         }
-        if spotifyURL != nil { entries.append(item("Spotify", #selector(playSpotify), numbered ? "\(stations.count + 1)" : "")) }
+        if spotifyURL != nil { entries.append(item("Spotify", #selector(playSpotify))) }
         return entries
     }
 
+    // Never shown by an accessory app, but ⌘V in an alert's text field and ⌘Q still go through it.
     func makeMenu() -> NSMenu {
         let main = NSMenu()
 
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(settingsItem())
-        appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Ukryj Radio", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
-        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Zakończ Radio", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         main.addItem(appItem)
@@ -281,23 +278,6 @@ extension AppDelegate {
         editMenu.addItem(withTitle: "Zaznacz wszystko", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editItem.submenu = editMenu
         main.addItem(editItem)
-
-        let stationItem = NSMenuItem(title: "Stacja", action: nil, keyEquivalent: "")
-        let stationMenu = NSMenu(title: "Stacja")
-        for entry in sourceItems(numbered: true) {
-            if entry.action == #selector(playSpotify) { spotifyMenuItems.append(entry) } else { appStationMenuItems.append(entry) }
-            stationMenu.addItem(entry)
-        }
-        stationItem.submenu = stationMenu
-        main.addItem(stationItem)
-
-        let soundItem = NSMenuItem(title: "Dźwięk", action: nil, keyEquivalent: "")
-        let soundMenu = NSMenu(title: "Dźwięk")
-        soundMenu.addItem(item("Wycisz / włącz dźwięk", #selector(toggleMute), "m"))
-        soundMenu.addItem(item("Głośniej", #selector(volumeUp), String(Character(UnicodeScalar(NSUpArrowFunctionKey)!))))
-        soundMenu.addItem(item("Ciszej", #selector(volumeDown), String(Character(UnicodeScalar(NSDownArrowFunctionKey)!))))
-        soundItem.submenu = soundMenu
-        main.addItem(soundItem)
 
         return main
     }

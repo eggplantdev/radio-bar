@@ -49,7 +49,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     var nextButton: TransportButton!
     var levelLabel: NSTextField!
     var stationMenuItems: [NSMenuItem] = []
-    var appStationMenuItems: [NSMenuItem] = []
     var rowsKey: String?
     var retryDelay: TimeInterval = 3
     var statusObservation: NSKeyValueObservation?
@@ -77,7 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     var paused = false
     var stationSongs = [String?](repeating: nil, count: stations.count)
     var stationShows = [String?](repeating: nil, count: stations.count)
-    var spotifyMenuItems: [NSMenuItem] = []
+    var spotifyMenuItem: NSMenuItem?
     let spotifyQueue = DispatchQueue(label: "spotify")
     var muted = false
     var volume = UserDefaults.standard.double(forKey: "volume")
@@ -131,8 +130,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         spotifyQueue.sync { _ = NSAppleScript(source: source)?.executeAndReturnError(nil) }
     }
 
+    // Launching Radio again is the way back when the notch hides its menu-bar item.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        openSource()
+        DispatchQueue.main.async {
+            _ = self.statusItem.menu?.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+            // The relaunch made Radio active with no window, so keystrokes would land in it.
+            NSApp.hide(nil)
+        }
         return true
     }
 

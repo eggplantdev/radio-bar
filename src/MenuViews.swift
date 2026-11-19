@@ -153,11 +153,6 @@ class HoverRowView: NSView {
 
     required init?(coder: NSCoder) { nil }
 
-    // A menu with views opens in an ordinary window, which lands on the desktop space behind another display's full-screen app.
-    override func viewDidMoveToWindow() {
-        window?.collectionBehavior.formUnion([.canJoinAllSpaces, .fullScreenAuxiliary])
-    }
-
     override func mouseEntered(with event: NSEvent) { needsDisplay = true }
     // The menu takes the highlight away only after the pointer has left.
     override func mouseExited(with event: NSEvent) { needsDisplay = true; DispatchQueue.main.async { self.needsDisplay = true } }

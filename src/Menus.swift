@@ -99,11 +99,6 @@ extension AppDelegate {
             menu.addItem(entry)
         }
         menu.addItem(.separator())
-        if spotifyURL != nil {
-            let find = symbolItem("Otwórz w Spotify", "arrow.up.forward.app", #selector(findInSpotify), "l")
-            find.keyEquivalentModifierMask = [.control, .option]
-            menu.addItem(find)
-        }
         youTubeItem = symbolItem("Szukaj na YouTube", "play.rectangle", #selector(findOnYouTube))
         youTubeItem.isHidden = !showsYouTubeSearch
         menu.addItem(youTubeItem)
@@ -152,6 +147,11 @@ extension AppDelegate {
         menu.addItem(.separator())
         openSourceItem = item("Otwórz stronę stacji", #selector(openSource))
         menu.addItem(openSourceItem)
+        if spotifyURL != nil {
+            let find = symbolItem("Otwórz w Spotify", "arrow.up.forward.app", #selector(findInSpotify), "l")
+            find.keyEquivalentModifierMask = [.control, .option]
+            menu.addItem(find)
+        }
         menu.addItem(settingsItem())
         menu.addItem(withTitle: "Zakończ", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
         menu.addItem(.separator())

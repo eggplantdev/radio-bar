@@ -145,7 +145,7 @@ extension AppDelegate {
         menu.addItem(rowItem)
 
         menu.addItem(.separator())
-        openSourceItem = item("Otwórz stronę stacji", #selector(openSource))
+        openSourceItem = symbolItem("Otwórz stronę stacji", "globe", #selector(openSource))
         menu.addItem(openSourceItem)
         if spotifyURL != nil {
             let find = symbolItem("Otwórz w Spotify", "arrow.up.forward.app", #selector(findInSpotify), "l")
@@ -153,7 +153,7 @@ extension AppDelegate {
             menu.addItem(find)
         }
         menu.addItem(settingsItem())
-        menu.addItem(withTitle: "Zakończ", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
+        withSymbol(menu.addItem(withTitle: "Zakończ", action: #selector(NSApplication.terminate(_:)), keyEquivalent: ""), "power")
         menu.addItem(.separator())
         menu.addItem(footerItem())
         for entry in menu.items + menu.items.flatMap({ $0.submenu?.items ?? [] }) where !entry.isSeparatorItem && entry.view == nil {
@@ -225,6 +225,9 @@ extension AppDelegate {
         attachment.image = brandMark(height: 18)
         attachment.bounds = NSRect(x: 0, y: (font.capHeight - 18) / 2, width: attachment.image!.size.width, height: 18)
         title.append(NSAttributedString(attachment: attachment))
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .right
+        title.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: title.length))
         entry.attributedTitle = title
         return entry
     }
@@ -240,10 +243,14 @@ extension AppDelegate {
     }
 
     private func symbolItem(_ title: String, _ symbol: String, _ action: Selector, _ key: String = "") -> NSMenuItem {
-        let entry = item(title, action, key)
+        withSymbol(item(title, action, key), symbol)
+    }
+
+    @discardableResult
+    func withSymbol(_ entry: NSMenuItem, _ symbol: String) -> NSMenuItem {
         let image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
             .withSymbolConfiguration(.init(paletteColors: [.labelColor]))
-        entry.attributedTitle = menuTitle(image, title)
+        entry.attributedTitle = menuTitle(image, entry.title)
         return entry
     }
 

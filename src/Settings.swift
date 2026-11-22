@@ -100,7 +100,7 @@ extension AppDelegate {
         }
         let entry = NSMenuItem(title: "Ustawienia", action: nil, keyEquivalent: "")
         entry.submenu = menu
-        return entry
+        return withSymbol(entry, "gearshape")
     }
 }
 

@@ -287,7 +287,7 @@ final class MenuRowView: HoverRowView {
         }
         let textHeight = ceil(titleSize.height)
         let textY = max((bounds.height - textHeight) / 2, 0)
-        text.draw(with: NSRect(x: textX, y: textY, width: bounds.width - textX, height: textHeight), options: .usesLineFragmentOrigin)
+        text.draw(with: NSRect(x: textX, y: textY, width: bounds.width - textX - trailingInset, height: textHeight), options: .usesLineFragmentOrigin)
         let lineHeight = min(textHeight, menuLineHeight)
         if let key = keyEquivalent {
             let size = key.size()
